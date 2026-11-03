@@ -1,0 +1,20 @@
+{
+  "scenarios": [
+    {
+      "id": "VD-01",
+      "title": "Vendor late with a component",
+      "situation": "A supplier's tracking module is ten days late. The trainee must tell the client.",
+      "client_objections": [
+        "When were you going to tell me?",
+        "What is the new date, and what does it cost me?",
+        "Why should I trust this date?"
+      ],
+      "good_answer_contains": [
+        "admits the late warning",
+        "gives a specific new date and who committed to it",
+        "says who pays for the delay",
+        "says what changes to avoid a repeat"
+      ]
+    }
+  ]
+}

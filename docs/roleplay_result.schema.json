@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "ResultBody": {
+      "properties": {
+        "pushback_peak_step": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Pushback Peak Step",
+          "type": "integer"
+        },
+        "handled": {
+          "enum": [
+            "yes",
+            "partly",
+            "no"
+          ],
+          "title": "Handled",
+          "type": "string"
+        },
+        "strengths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Strengths",
+          "type": "array"
+        },
+        "gaps": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Gaps",
+          "type": "array"
+        },
+        "evidence_turns": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Turns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "pushback_peak_step",
+        "handled",
+        "gaps",
+        "evidence_turns"
+      ],
+      "title": "ResultBody",
+      "type": "object"
+    },
+    "ResultTurn": {
+      "properties": {
+        "turn": {
+          "minimum": 1,
+          "title": "Turn",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "client",
+            "trainee"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn",
+        "role",
+        "text"
+      ],
+      "title": "ResultTurn",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "contract": {
+      "const": "roleplay-result",
+      "default": "roleplay-result",
+      "title": "Contract",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "persona_version": {
+      "title": "Persona Version",
+      "type": "string"
+    },
+    "turns": {
+      "items": {
+        "$ref": "#/$defs/ResultTurn"
+      },
+      "minItems": 1,
+      "title": "Turns",
+      "type": "array"
+    },
+    "result": {
+      "$ref": "#/$defs/ResultBody"
+    },
+    "human_review_required": {
+      "default": true,
+      "title": "Human Review Required",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "session_id",
+    "scenario_id",
+    "persona_version",
+    "turns",
+    "result"
+  ],
+  "title": "RoleplayResult",
+  "type": "object"
+}

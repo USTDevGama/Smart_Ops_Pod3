@@ -1,0 +1,36 @@
+# Local development only: Postgres + Redis. The API and worker run on your machine (see README).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: podc
+      POSTGRES_PASSWORD: podc
+      POSTGRES_DB: podc
+    ports:
+      - "5432:5432"
+    volumes:
+      - podc_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U podc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    # noeviction: the queue (DB 1) must never lose messages; cache keys carry TTLs instead.
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+
+  # Optional browser UI to look at the tables: http://localhost:8080
+  # System: PostgreSQL | Server: postgres | User: podc | Password: podc | Database: podc
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  podc_pgdata:

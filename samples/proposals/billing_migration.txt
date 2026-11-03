@@ -1,0 +1,25 @@
+PROPOSAL: Billing Platform Migration
+(Made-up sample for development. Not real client or trainee data.)
+
+1. Summary
+We propose migrating the company's billing system from the legacy monolith to
+microservices. The programme will run for six months with a total budget of $400,000.
+
+2. Scope
+Phase 1 (months 1-3): invoicing service and customer ledger.
+Phase 2 (months 4-6): payments service, integrated with the CloudPay gateway.
+
+3. Team
+Three delivery teams will work in parallel: Invoicing, Payments and Platform.
+
+4. Budget
+The total budget is $400,000. A detailed breakdown will be shared after approval.
+
+5. Timeline
+All work completes within six months. Go-live is planned for the end of month six.
+
+6. Vendors
+CloudPay will be the only payment gateway. The contract is being finalised.
+
+7. Expected benefits
+Faster releases and lower maintenance effort. Benefits will be measured after go-live.

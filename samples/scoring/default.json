@@ -1,0 +1,12 @@
+{
+  "dimensions": [
+    {"key": "responsiveness", "label": "Responsiveness (answered the persona's concerns)", "weight": 0.4, "alpha": 0.4},
+    {"key": "communication", "label": "Communication (clear and specific)", "weight": 0.3, "alpha": 0.4},
+    {"key": "pressure_handling", "label": "Pressure handling (composure and recovery)", "weight": 0.3, "alpha": 0.4}
+  ],
+  "band_cutoffs": {"production_ready": 90, "enterprise_ready": 75, "needs_remediation": 50},
+  "agreement_gap": 25,
+  "min_findings_pass_rate": 0.8,
+  "scoring_runs": 1,
+  "pass_cutoff": 50
+}
