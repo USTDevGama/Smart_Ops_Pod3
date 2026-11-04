@@ -8,7 +8,7 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 | `personas/ms_verma_strict.json` | a persona (validated against `PersonaConfig`) |
 | `scenarios/vendor_delay.json` | a scenario with objections and a good-answer checklist (validated against `ScenarioConfig`) |
 | `results/vendor_delay_result.json` | an example of the program's result format (validated against `RoleplayResult`) |
-| `scoring/default.json` | a scoring profile (validated against `ScoringConfig`) |
+| `scoring/default.json` | a scoring profile (validated against `ScoringConfig`); not used by the API until scoring is built |
 
 The three dimensions and all weights in `scoring/default.json` are **placeholders**, not from the BRD.
 

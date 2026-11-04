@@ -1,5 +1,7 @@
 # Scaffold review guide
 
+> **Out of date in part (2026-11-04).** This guide describes the scaffold as first pushed, with 12 tables. Migration `0002` has since trimmed the database to 5 tables (`config_version`, `proposal`, `proposal_segment`, `session`, `turn`) and the settings, proposal and chat APIs were added. For the current tables read [data-model.md](data-model.md); for the current API read the README and [backend-api-plan.md](backend-api-plan.md). Sections 3, 4 and 7 to 9 below still describe the original 12 tables and the original stubs.
+
 A guided tour of everything built so far, written so the team can review it. It covers every file, the database in depth (all 12 tables, every column, why it exists, example values), the shared data shapes (schemas), and what is real versus placeholder.
 
 **Snapshot:** 64 files, about 1,400 lines of application code, about 640 lines of tests, 63 tests (58 run anywhere, 5 more run when the confidential seed pack is available).

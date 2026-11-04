@@ -15,9 +15,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     blob_dir: str = "./storage"
+    max_upload_mb: int = 10
+    # True runs the ingest step inside the API call (no Redis or worker needed). Local use only.
+    ingest_inline: bool = False
     llm_provider: str = "fake"
     retention_days: int = 30
-    max_llm_calls_per_session: int = 40
     dev_auth_enabled: bool = True
     # Local folder holding the program's confidential seed pack. Never inside this repo.
     seed_dir: str | None = None

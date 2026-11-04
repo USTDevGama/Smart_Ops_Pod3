@@ -10,7 +10,12 @@ from app.workers.celery_app import celery_app
 
 @celery_app.task(name="ingest_proposal")
 def ingest_proposal(proposal_id: str) -> None:
-    raise NotImplementedError("Dev A: extract, OCR, segment, brief")
+    # TEMPORARY: the real extract, OCR and brief come from Kedar. Replace this call.
+    from uuid import UUID
+
+    from app.ingest.placeholder import ingest_in_new_session
+
+    ingest_in_new_session(UUID(proposal_id))
 
 
 @celery_app.task(name="run_assessment")

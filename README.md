@@ -20,11 +20,11 @@ Pod C's agent for the Multi-Agent Training Evaluation Platform ("The Tough Clien
 13. [Glossary](#glossary)
 
 ## What it does
-1. **Setup.** An admin saves a **persona** (who the client is, their rules and escalation ladder), a **scenario** (the situation, the client's objections, and a checklist of what a good answer contains) and a **scoring profile** (skills, weights, thresholds). Each edit is a new numbered version.
+1. **Setup.** An admin saves a **persona** (who the client is, their rules and escalation ladder), and a **scenario** (the situation, the client's objections, and a checklist of what a good answer contains). Each edit is a new numbered version. (Scoring profiles come later with scoring.)
 2. **Optional proposal.** A trainee can upload a proposal (PDF, DOCX or TXT). Scanned pages are read with OCR. The system builds a short **brief** of its claims, budget, timeline and weak points so the client can challenge the trainee on their own document.
 3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit, when the checklist is covered, or when someone ends it.
-4. **The mark.** A scoring job rates the trainee on a few skills. Every point cites a real chat message, and code checks the quote is genuinely there.
-5. **Review and handoff.** An admin approves or overrides the suggested mark, a report is generated, and the result goes out in the program's **roleplay-result** format for Pod D.
+4. **The mark** (not built yet). A scoring job rates the trainee on a few skills. Every point cites a real chat message, and code checks the quote is genuinely there.
+5. **Review and handoff** (not built yet). An admin approves or overrides the suggested mark, a report is generated, and the result goes out in the program's **roleplay-result** format for Pod D.
 
 ## Where it fits in the platform
 ```
@@ -55,14 +55,15 @@ Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + 
 ## Repository layout and owners
 | Folder | Purpose | Owner |
 |---|---|---|
-| `app/ingest/` | file parsing, OCR, proposal chunks, the brief, upload endpoints | **Dev A** |
-| `app/reports/` | HTML to PDF report with citations | **Dev A** |
-| `app/agent/` | turn graph, persona prompts, escalation guard, turn limit, session logic | **Dev B** |
-| `app/scoring/` | scoring graph, quote checker, counting signals, weighted blend, confidence, review logic, result output | **Dev C** |
+| `app/ingest/` | proposal upload endpoints (`router.py`, ours) and the real file parsing, OCR, chunks and brief (`placeholder.py` is a temporary stand-in) | endpoints: **Dev A**; parsing, OCR and brief: **Kedar** |
+| `app/reports/` | HTML to PDF report with citations (not started) | **Disha** |
+| `app/sessions/` | session and chat endpoints, saving turns, the turn limit, the one-step escalation clamp | **Dev B** |
+| `app/agent/` | the turn engine: how one client reply is produced (`TurnEngine`; `placeholder.py` is a temporary stand-in) | **Shubra** |
+| `app/scoring/` | scoring, review and reports (not started) | **Disha** |
 | `app/schemas/` | shared data shapes every module codes against (settings, chat turn, result format) | **Dev D** |
-| `app/db/` | the 12 table models | **Dev D** |
+| `app/db/` | the 5 table models | **Dev D** |
 | `app/llm/` | the LLM interface, a scripted `FakeLLM` for tests, the real provider client later | **Dev D** |
-| `app/api/` | API skeleton and shared dependencies (each owner adds their own routers) | **Dev D** |
+| `app/api/` | API skeleton, shared dependencies, the one error format, and the settings endpoints (`admin_config.py`) | **Dev D** (settings: **Dev C**) |
 | `app/workers/` | Celery app and background jobs | **Dev D** (job bodies by the dev named on each task) |
 | `app/seed.py` | loads the confidential seed pack from a local folder | **Dev D** |
 | `alembic/versions/` | database migrations. **Only Dev D writes migrations.** | **Dev D** |
@@ -88,8 +89,20 @@ To add a dependency: `uv add <package>` and commit both `pyproject.toml` and `uv
 
 Settings come from `PODC_*` environment variables; copy `.env.example` to `.env`. `PODC_LLM_PROVIDER=fake` (the default) needs no key. Until real login exists, send `X-Dev-User` and `X-Dev-Role` (`trainee`, `admin` or `integrator`) headers; this fake login refuses to start outside `PODC_ENV=local|dev`.
 
+## API at a glance
+All paths start with `/api/v1`. The full, always-current list is `docs/openapi.yaml` (regenerate it with `uv run python -m app.export_openapi` after changing an endpoint). Until real login exists, send `X-Dev-User` and `X-Dev-Role` headers.
+| Area | Endpoints | Who |
+|---|---|---|
+| Settings | `GET /personas`, `GET /scenarios` (published only); `GET/POST /admin/config/{persona or scenario}`, `POST .../{key}/versions`, `GET/PUT .../versions/{n}` (drafts only), `POST .../versions/{n}/publish` | trainee, admin |
+| Proposals | `POST /proposals` (202, then poll), `GET /proposals`, `GET /proposals/{id}`, `GET /proposals/{id}/segments`, `DELETE /proposals/{id}` | owner, admin |
+| Chat | `POST /sessions`, `GET /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns` (needs an `Idempotency-Key` header; replies as a server-sent event stream), `POST /sessions/{id}/end` | owner, admin |
+| Planned (answer 501) | `GET /sessions/{id}/assessment`, `GET /admin/review-queue`, `POST /admin/assessments/{id}/review` and `/rescore`, `GET /assessments/{id}/report`, `GET /integration/signals` | scoring owner |
+Errors always look like `{"type", "title", "status", "detail"}`. For local work without Redis, set `PODC_INGEST_INLINE=true` so an upload is processed inside the request.
+
+**How the chat is split.** The service (`app/sessions/`) saves turns and enforces the hard rules. It asks the agent for each reply only through `TurnEngine` (`app/agent/engine.py`), so the agent can be a LangGraph graph or one prompt plus one LLM call without touching the service. Until the real agent lands, `PlaceholderEngine` answers with canned logic and no LLM.
+
 ## Looking at the database
-The 12 tables are explained column by column, with a diagram, in [docs/data-model.md](docs/data-model.md). To browse them yourself:
+The 5 tables are explained column by column, with a diagram, in [docs/data-model.md](docs/data-model.md). New tables are empty, so load a small made-up example session (it uses only our own `samples/`) with `uv run python -m app.demo_data` after `uv run alembic upgrade head`. It is safe to run twice and refuses to run outside local and dev. To browse the tables yourself:
 
 | Option | Needs Docker? | How |
 |---|---|---|
@@ -125,9 +138,9 @@ The program's seed pack is marked **UST CONFIDENTIAL: do not copy outside the pr
 Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interface are deliberately out of scope for now.
 
 ## Status and open questions
-**Done:** repository scaffold: shared data shapes (including the program's result format), the 12 tables with the first migration, `FakeLLM`, API skeleton, background-job stubs, made-up samples, and tests that also pass against the real seed pack.
+**Done:** repository scaffold (shared data shapes, `FakeLLM`, made-up samples, tests that also pass against the real seed pack); the 5 tables (migration `0002` trimmed the original 12); the settings, proposal and session/chat APIs with a placeholder ingest and a placeholder agent.
 
-**Next:** one branch per area: ingestion and OCR, the conversation, scoring, then the real LLM client once API keys arrive.
+**Next:** the real ingestion (parsing, OCR, brief) and the real agent, both behind the interfaces above; then scoring, review and reports; the real LLM client once API keys arrive; retries and the 30-day deletion job for background work.
 
 **Open questions for the TPM:**
 - Do proposals stay as an input alongside the scenarios? How do they combine?
@@ -147,7 +160,7 @@ Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interfa
 | **Escalation step (1-4)** | How tough the client currently is. |
 | **Session** | One roleplay run by one trainee. |
 | **Assessment / Evidence** | The suggested score for a session / one cited quote behind it. |
-| **Version** | Each admin edit of a persona, scenario or scoring profile saves a new numbered version. Sessions record the versions they used. |
+| **Version** | Each admin edit of a persona or scenario saves a new numbered version. Sessions record the versions they used. |
 | **Cohort (`cohort_id`)** | One batch of trainees going through the program. |
 | **`trainee_ref`** | A pseudonymous trainee id so names never travel between pods. |
 | **Roleplay result** | The program's agreed output format, sent to Pod D. |

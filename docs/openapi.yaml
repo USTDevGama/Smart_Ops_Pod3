@@ -51,3 +51,1739 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Meta Api V1 Meta Get
+  /api/v1/admin/config/{kind}:
+    get:
+      tags:
+      - settings
+      summary: List Keys
+      operationId: list_keys_api_v1_admin_config__kind__get
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ConfigKind'
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KeyOut'
+                title: Response List Keys Api V1 Admin Config  Kind  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - settings
+      summary: Create Key
+      operationId: create_key_api_v1_admin_config__kind__post
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ConfigKind'
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewKey'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/config/{kind}/{key}/versions:
+    post:
+      tags:
+      - settings
+      summary: New Version
+      operationId: new_version_api_v1_admin_config__kind___key__versions_post
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ConfigKind'
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/NewVersion'
+              - type: 'null'
+              title: Body
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/config/{kind}/{key}/versions/{version_no}:
+    get:
+      tags:
+      - settings
+      summary: Get Version
+      operationId: get_version_api_v1_admin_config__kind___key__versions__version_no__get
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ConfigKind'
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      - name: version_no
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version No
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - settings
+      summary: Edit Draft
+      operationId: edit_draft_api_v1_admin_config__kind___key__versions__version_no__put
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ConfigKind'
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      - name: version_no
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version No
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftBody'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/config/{kind}/{key}/versions/{version_no}/publish:
+    post:
+      tags:
+      - settings
+      summary: Publish
+      operationId: publish_api_v1_admin_config__kind___key__versions__version_no__publish_post
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ConfigKind'
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      - name: version_no
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version No
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/personas:
+    get:
+      tags:
+      - settings
+      summary: List Personas
+      operationId: list_personas_api_v1_personas_get
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublishedItem'
+                title: Response List Personas Api V1 Personas Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/scenarios:
+    get:
+      tags:
+      - settings
+      summary: List Scenarios
+      operationId: list_scenarios_api_v1_scenarios_get
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublishedItem'
+                title: Response List Scenarios Api V1 Scenarios Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/proposals:
+    post:
+      tags:
+      - proposals
+      summary: Upload Proposal
+      description: Save the file, queue the ingest job, return 202. Poll GET /proposals/{id}
+        until ready.
+      operationId: upload_proposal_api_v1_proposals_post
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_proposal_api_v1_proposals_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - proposals
+      summary: List Proposals
+      operationId: list_proposals_api_v1_proposals_get
+      parameters:
+      - name: owner_ref
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Ref
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProposalOut'
+                title: Response List Proposals Api V1 Proposals Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/proposals/{proposal_id}:
+    get:
+      tags:
+      - proposals
+      summary: Get Proposal
+      operationId: get_proposal_api_v1_proposals__proposal_id__get
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - proposals
+      summary: Delete Proposal
+      operationId: delete_proposal_api_v1_proposals__proposal_id__delete
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/proposals/{proposal_id}/segments:
+    get:
+      tags:
+      - proposals
+      summary: List Segments
+      description: The numbered chunks, so the UI can show the text a persona question
+        cites.
+      operationId: list_segments_api_v1_proposals__proposal_id__segments_get
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Segment'
+                title: Response List Segments Api V1 Proposals  Proposal Id  Segments
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions:
+    post:
+      tags:
+      - sessions
+      summary: Create Session
+      description: 'Start a chat: pins the latest published persona and scenario,
+        and the client speaks first.'
+      operationId: create_session_api_v1_sessions_post
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewSession'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - sessions
+      summary: List Sessions
+      operationId: list_sessions_api_v1_sessions_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/SessionStatus'
+          - type: 'null'
+          title: Status
+      - name: trainee_ref
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: admins only
+          title: Trainee Ref
+        description: admins only
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionOut'
+                title: Response List Sessions Api V1 Sessions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}:
+    get:
+      tags:
+      - sessions
+      summary: Get Session
+      operationId: get_session_api_v1_sessions__session_id__get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/turns:
+    post:
+      tags:
+      - sessions
+      summary: Send Turn
+      description: 'Send a message. Returns a server-sent event stream: `message`
+        (the reply), then `done`.
+
+
+        Sending the same Idempotency-Key again returns the stored reply and saves
+        nothing new.'
+      operationId: send_turn_api_v1_sessions__session_id__turns_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          title: Idempotency-Key
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewTurn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/end:
+    post:
+      tags:
+      - sessions
+      summary: End Session
+      description: End the chat. Harmless to repeat.
+      operationId: end_session_api_v1_sessions__session_id__end_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/assessment:
+    get:
+      tags:
+      - planned (not built)
+      summary: Get Assessment
+      operationId: get_assessment_api_v1_sessions__session_id__assessment_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/review-queue:
+    get:
+      tags:
+      - planned (not built)
+      summary: Review Queue
+      operationId: review_queue_api_v1_admin_review_queue_get
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/assessments/{assessment_id}/review:
+    post:
+      tags:
+      - planned (not built)
+      summary: Review Assessment
+      operationId: review_assessment_api_v1_admin_assessments__assessment_id__review_post
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Assessment Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/assessments/{assessment_id}/rescore:
+    post:
+      tags:
+      - planned (not built)
+      summary: Rescore Assessment
+      operationId: rescore_assessment_api_v1_admin_assessments__assessment_id__rescore_post
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Assessment Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assessments/{assessment_id}/report:
+    get:
+      tags:
+      - planned (not built)
+      summary: Get Report
+      operationId: get_report_api_v1_assessments__assessment_id__report_get
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Assessment Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/integration/signals:
+    get:
+      tags:
+      - planned (not built)
+      summary: Integration Signals
+      operationId: integration_signals_api_v1_integration_signals_get
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    Body_upload_proposal_api_v1_proposals_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_proposal_api_v1_proposals_post
+    Brief:
+      properties:
+        summary:
+          type: string
+          title: Summary
+        items:
+          items:
+            $ref: '#/components/schemas/BriefItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - summary
+      - items
+      title: Brief
+      description: Structured summary of a proposal, stored on `proposal.brief`.
+    BriefItem:
+      properties:
+        kind:
+          type: string
+          enum:
+          - claim
+          - assumption
+          - risk
+          - weak_point
+          - inconsistency
+          title: Kind
+        text:
+          type: string
+          title: Text
+        segment_ids:
+          items:
+            type: string
+            format: uuid
+          type: array
+          minItems: 1
+          title: Segment Ids
+      type: object
+      required:
+      - kind
+      - text
+      - segment_ids
+      title: BriefItem
+      description: 'One thing the ingest LLM call found in the proposal.
+
+
+        `segment_ids` are the chunks it came from. They are required so the persona
+        can only
+
+        challenge something the proposal really says (code checks the ids exist).'
+    ConfigKind:
+      type: string
+      enum:
+      - persona
+      - scenario
+      title: ConfigKind
+    ConfigStatus:
+      type: string
+      enum:
+      - draft
+      - published
+      - retired
+      title: ConfigStatus
+    DraftBody:
+      properties:
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+      type: object
+      required:
+      - config
+      title: DraftBody
+    EndReason:
+      type: string
+      enum:
+      - trainee_ended
+      - turn_cap
+      - concerns_resolved
+      - time_limit
+      - admin_ended
+      title: EndReason
+    FileType:
+      type: string
+      enum:
+      - pdf
+      - docx
+      - txt
+      title: FileType
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    KeyOut:
+      properties:
+        key:
+          type: string
+          title: Key
+        versions:
+          items:
+            $ref: '#/components/schemas/VersionSummary'
+          type: array
+          title: Versions
+      type: object
+      required:
+      - key
+      - versions
+      title: KeyOut
+    NewKey:
+      properties:
+        key:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,99}$
+          title: Key
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+      type: object
+      required:
+      - key
+      - config
+      title: NewKey
+    NewSession:
+      properties:
+        persona_key:
+          type: string
+          title: Persona Key
+        scenario_key:
+          type: string
+          title: Scenario Key
+        proposal_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Proposal Id
+      type: object
+      required:
+      - persona_key
+      - scenario_key
+      title: NewSession
+    NewTurn:
+      properties:
+        content:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Content
+      type: object
+      required:
+      - content
+      title: NewTurn
+    NewVersion:
+      properties:
+        config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Config
+      type: object
+      title: NewVersion
+    ProposalDetail:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/ProposalStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        owner_ref:
+          type: string
+          title: Owner Ref
+        brief:
+          anyOf:
+          - $ref: '#/components/schemas/Brief'
+          - type: 'null'
+        segment_count:
+          type: integer
+          title: Segment Count
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - error
+      - created_at
+      - owner_ref
+      - brief
+      - segment_count
+      title: ProposalDetail
+    ProposalOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/ProposalStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        owner_ref:
+          type: string
+          title: Owner Ref
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - error
+      - created_at
+      - owner_ref
+      title: ProposalOut
+    ProposalStatus:
+      type: string
+      enum:
+      - queued
+      - extracting
+      - ready
+      - failed
+      title: ProposalStatus
+    PublishedItem:
+      properties:
+        key:
+          type: string
+          title: Key
+        version_no:
+          type: integer
+          title: Version No
+        title:
+          type: string
+          title: Title
+        summary:
+          type: string
+          title: Summary
+      type: object
+      required:
+      - key
+      - version_no
+      - title
+      - summary
+      title: PublishedItem
+    Segment:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        proposal_id:
+          type: string
+          format: uuid
+          title: Proposal Id
+        seq:
+          type: integer
+          title: Seq
+        page:
+          type: integer
+          title: Page
+        kind:
+          $ref: '#/components/schemas/SegmentKind'
+        text:
+          type: string
+          title: Text
+        ocr_confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Ocr Confidence
+      type: object
+      required:
+      - id
+      - proposal_id
+      - seq
+      - page
+      - kind
+      - text
+      title: Segment
+      description: One citable chunk of the proposal (a `proposal_segment` row).
+    SegmentKind:
+      type: string
+      enum:
+      - text
+      - ocr
+      title: SegmentKind
+    SessionDetail:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        trainee_ref:
+          type: string
+          title: Trainee Ref
+        proposal_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Proposal Id
+        persona:
+          $ref: '#/components/schemas/VersionRef'
+        scenario:
+          $ref: '#/components/schemas/VersionRef'
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        end_reason:
+          anyOf:
+          - $ref: '#/components/schemas/EndReason'
+          - type: 'null'
+        started_at:
+          type: string
+          format: date-time
+          title: Started At
+        ended_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Ended At
+        level:
+          type: integer
+          title: Level
+        turns_used:
+          type: integer
+          title: Turns Used
+        max_turns:
+          type: integer
+          title: Max Turns
+        turns:
+          items:
+            $ref: '#/components/schemas/TurnOut'
+          type: array
+          title: Turns
+      type: object
+      required:
+      - id
+      - trainee_ref
+      - proposal_id
+      - persona
+      - scenario
+      - status
+      - end_reason
+      - started_at
+      - ended_at
+      - level
+      - turns_used
+      - max_turns
+      - turns
+      title: SessionDetail
+    SessionOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        trainee_ref:
+          type: string
+          title: Trainee Ref
+        proposal_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Proposal Id
+        persona:
+          $ref: '#/components/schemas/VersionRef'
+        scenario:
+          $ref: '#/components/schemas/VersionRef'
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        end_reason:
+          anyOf:
+          - $ref: '#/components/schemas/EndReason'
+          - type: 'null'
+        started_at:
+          type: string
+          format: date-time
+          title: Started At
+        ended_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Ended At
+        level:
+          type: integer
+          title: Level
+        turns_used:
+          type: integer
+          title: Turns Used
+        max_turns:
+          type: integer
+          title: Max Turns
+      type: object
+      required:
+      - id
+      - trainee_ref
+      - proposal_id
+      - persona
+      - scenario
+      - status
+      - end_reason
+      - started_at
+      - ended_at
+      - level
+      - turns_used
+      - max_turns
+      title: SessionOut
+    SessionStatus:
+      type: string
+      enum:
+      - active
+      - ended
+      title: SessionStatus
+    TurnOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        idx:
+          type: integer
+          title: Idx
+        role:
+          $ref: '#/components/schemas/TurnRole'
+        content:
+          type: string
+          title: Content
+        escalation_level:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Escalation Level
+        refs:
+          items:
+            type: string
+            format: uuid
+          type: array
+          title: Refs
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        evaluation:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Evaluation
+      type: object
+      required:
+      - id
+      - idx
+      - role
+      - content
+      - escalation_level
+      - refs
+      - created_at
+      title: TurnOut
+    TurnRole:
+      type: string
+      enum:
+      - persona
+      - trainee
+      title: TurnRole
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VersionOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        kind:
+          $ref: '#/components/schemas/ConfigKind'
+        key:
+          type: string
+          title: Key
+        version_no:
+          type: integer
+          title: Version No
+        status:
+          $ref: '#/components/schemas/ConfigStatus'
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - kind
+      - key
+      - version_no
+      - status
+      - config
+      - created_at
+      title: VersionOut
+    VersionRef:
+      properties:
+        key:
+          type: string
+          title: Key
+        version_no:
+          type: integer
+          title: Version No
+      type: object
+      required:
+      - key
+      - version_no
+      title: VersionRef
+    VersionSummary:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        version_no:
+          type: integer
+          title: Version No
+        status:
+          $ref: '#/components/schemas/ConfigStatus'
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - version_no
+      - status
+      - created_at
+      title: VersionSummary
