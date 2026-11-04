@@ -6,8 +6,9 @@ from sqlalchemy import JSON, DateTime, Enum, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-# Plain JSON on SQLite (tests), JSONB on PostgreSQL.
-JsonType = JSON().with_variant(JSONB(), "postgresql")
+# Plain JSON on SQLite (tests), JSONB on PostgreSQL. none_as_null: an empty value is saved as a
+# real database NULL (an empty cell), not as the JSON word "null".
+JsonType = JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 
 
 class Base(DeclarativeBase):

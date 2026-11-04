@@ -12,7 +12,6 @@ class Role(StrEnum):
 class ConfigKind(StrEnum):
     PERSONA = "persona"
     SCENARIO = "scenario"
-    SCORING_PROFILE = "scoring_profile"
 
 
 class ConfigStatus(StrEnum):
