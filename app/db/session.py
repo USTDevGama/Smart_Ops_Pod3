@@ -12,10 +12,14 @@ def get_engine() -> Engine:
     return create_engine(get_settings().database_url, pool_pre_ping=True)
 
 
+def make_session() -> Session:
+    """A session for code outside a request, such as a Celery task. Use it in a `with` block."""
+    return sessionmaker(bind=get_engine(), expire_on_commit=False)()
+
+
 def get_session() -> Iterator[Session]:
     """FastAPI dependency: one database session per request."""
-    factory = sessionmaker(bind=get_engine(), expire_on_commit=False)
-    with factory() as session:
+    with make_session() as session:
         yield session
 
 

@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1076 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+14 TL
+(PROPOSAL: Billing Platform Migration) Tj T*
+(\(Made-up sample for development. Not real client or trainee data.\)) Tj T*
+(1. Summary) Tj T*
+(We propose migrating the company's billing system from the legacy monolith to) Tj T*
+(microservices. The programme will run for six months with a total budget of $400,000.) Tj T*
+(2. Scope) Tj T*
+(Phase 1 \(months 1-3\): invoicing service and customer ledger.) Tj T*
+(Phase 2 \(months 4-6\): payments service, integrated with the CloudPay gateway.) Tj T*
+(3. Team) Tj T*
+(Three delivery teams will work in parallel: Invoicing, Payments and Platform.) Tj T*
+(4. Budget) Tj T*
+(The total budget is $400,000. A detailed breakdown will be shared after approval.) Tj T*
+(5. Timeline) Tj T*
+(All work completes within six months. Go-live is planned for the end of month six.) Tj T*
+(6. Vendors) Tj T*
+(CloudPay will be the only payment gateway. The contract is being finalised.) Tj T*
+(7. Expected benefits) Tj T*
+(Faster releases and lower maintenance effort. Benefits will be measured after go-live.) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001369 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1439
+%%EOF

@@ -1,9 +1,10 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.enums import SegmentKind
+from app.schemas.enums import FileType, ProposalStatus, SegmentKind
 
 
 class Segment(BaseModel):
@@ -35,3 +36,17 @@ class Brief(BaseModel):
 
     summary: str
     items: list[BriefItem]
+
+
+class ProposalOut(BaseModel):
+    """What the API returns for an uploaded proposal. No file contents, no storage path."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    filename: str
+    file_type: FileType
+    status: ProposalStatus
+    error: str | None = None
+    brief: Brief | None = None
+    created_at: datetime

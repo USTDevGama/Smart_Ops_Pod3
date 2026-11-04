@@ -5,12 +5,29 @@ Owners: ingest_proposal -> Dev A, run_assessment -> Dev C, render_report -> Dev 
 sweep_stuck_jobs and the retention purge -> Dev D.
 """
 
+from pathlib import Path
+from uuid import UUID
+
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.config import get_settings
+from app.db.session import make_session
+from app.ingest.extract import OcrUnavailable
+from app.ingest.pipeline import run_ingest
+from app.ingest.storage import BlobStore
 from app.workers.celery_app import celery_app
 
 
-@celery_app.task(name="ingest_proposal")
+@celery_app.task(
+    name="ingest_proposal",
+    autoretry_for=(OSError, SQLAlchemyError, OcrUnavailable),
+    retry_backoff=True,
+    max_retries=3,
+)
 def ingest_proposal(proposal_id: str) -> None:
-    raise NotImplementedError("Dev A: extract, OCR, segment, brief")
+    settings = get_settings()
+    with make_session() as session:
+        run_ingest(session, UUID(proposal_id), BlobStore(Path(settings.blob_dir)), settings)
 
 
 @celery_app.task(name="run_assessment")

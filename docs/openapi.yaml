@@ -51,3 +51,276 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Meta Api V1 Meta Get
+  /api/v1/proposals:
+    post:
+      tags:
+      - proposals
+      summary: Upload Proposal
+      description: Save the file and queue ingestion. Returns 202 while the status
+        is still `queued`.
+      operationId: upload_proposal_api_v1_proposals_post
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_proposal_api_v1_proposals_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/proposals/{proposal_id}:
+    get:
+      tags:
+      - proposals
+      summary: Get Proposal
+      operationId: get_proposal_api_v1_proposals__proposal_id__get
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - proposals
+      summary: Delete Proposal
+      operationId: delete_proposal_api_v1_proposals__proposal_id__delete
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    Body_upload_proposal_api_v1_proposals_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_proposal_api_v1_proposals_post
+    Brief:
+      properties:
+        summary:
+          type: string
+          title: Summary
+        items:
+          items:
+            $ref: '#/components/schemas/BriefItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - summary
+      - items
+      title: Brief
+      description: Structured summary of a proposal, stored on `proposal.brief`.
+    BriefItem:
+      properties:
+        kind:
+          type: string
+          enum:
+          - claim
+          - assumption
+          - risk
+          - weak_point
+          - inconsistency
+          title: Kind
+        text:
+          type: string
+          title: Text
+        segment_ids:
+          items:
+            type: string
+            format: uuid
+          type: array
+          minItems: 1
+          title: Segment Ids
+      type: object
+      required:
+      - kind
+      - text
+      - segment_ids
+      title: BriefItem
+      description: 'One thing the ingest LLM call found in the proposal.
+
+
+        `segment_ids` are the chunks it came from. They are required so the persona
+        can only
+
+        challenge something the proposal really says (code checks the ids exist).'
+    FileType:
+      type: string
+      enum:
+      - pdf
+      - docx
+      - txt
+      title: FileType
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ProposalOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/ProposalStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        brief:
+          anyOf:
+          - $ref: '#/components/schemas/Brief'
+          - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - created_at
+      title: ProposalOut
+      description: What the API returns for an uploaded proposal. No file contents,
+        no storage path.
+    ProposalStatus:
+      type: string
+      enum:
+      - queued
+      - extracting
+      - ready
+      - failed
+      title: ProposalStatus
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

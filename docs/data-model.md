@@ -67,10 +67,10 @@ Each chunk can be pointed at, so the persona can say "page 7 says..." and code c
 |---|---|
 | `proposal_id` -> `proposal` | The proposal it belongs to. Deleted along with it. |
 | `seq` | The chunk's order (unique within a proposal). |
-| `page` | The page number (1 for plain text files). |
-| `kind` | `text` (read directly) or `ocr` (read from an image of text). |
+| `page` | The page number. Plain text and Word files have no pages, so they are all page 1. |
+| `kind` | `text` (read directly), `ocr` (read from an image of text) or `figure` (a chart or picture: its caption, text read inside it, and its type, e.g. "bar chart"; one figure per segment). |
 | `text` | The chunk itself. |
-| `ocr_confidence` | How sure the OCR was (0 to 1). Empty for normal text. Low values get flagged, not trusted. |
+| `ocr_confidence` | How sure the OCR was (0 to 1). Empty for normal text. For a figure it is the OCR confidence of the text read inside it. Low values get flagged, not trusted. |
 
 ## Group 3: the chat and the mark
 

@@ -1,0 +1,3 @@
+# Sample proposals are exact bytes: never convert line endings in them.
+*.pdf binary
+*.docx binary

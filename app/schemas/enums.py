@@ -37,6 +37,7 @@ class ProposalStatus(StrEnum):
 class SegmentKind(StrEnum):
     TEXT = "text"  # native text from the file
     OCR = "ocr"  # read from an image by OCR
+    FIGURE = "figure"  # a chart or picture: its caption, text read inside it, and its type
 
 
 class SessionStatus(StrEnum):

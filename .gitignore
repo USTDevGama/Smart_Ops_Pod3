@@ -10,3 +10,6 @@ storage/
 *.db
 .idea/
 .vscode/
+
+# local ingest debug dumps hold proposal content
+ingest-debug/
