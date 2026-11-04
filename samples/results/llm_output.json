@@ -1,0 +1,81 @@
+{
+  "criteria": [
+    {
+      "id": "C1",
+      "points": "0.5",
+      "reason": "Owns the late notice but not the delay itself.",
+      "evidence": [
+        {
+          "turn": 4,
+          "polarity": "positive"
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "points": "0.7",
+      "reason": "Firm date with a reason, after hedging in turn 2.",
+      "evidence": [
+        {
+          "turn": 2,
+          "polarity": "negative"
+        },
+        {
+          "turn": 3,
+          "polarity": "positive"
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "points": "0.4",
+      "reason": "Cost given as effort only; no money figure or who pays.",
+      "evidence": [
+        {
+          "turn": 3,
+          "polarity": "positive"
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "points": "0.2",
+      "reason": "Offers reporting, not a way to stop another delay.",
+      "evidence": [
+        {
+          "turn": 4,
+          "polarity": "positive"
+        }
+      ]
+    }
+  ],
+  "strengths": [
+    {
+      "text": "Gave a firm revised date with a reason",
+      "evidence_turns": [
+        3
+      ]
+    },
+    {
+      "text": "Took ownership of the late notice and committed to a weekly status",
+      "evidence_turns": [
+        4
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "text": "Cost impact given in effort, not money, and who pays is not stated",
+      "evidence_turns": [
+        3
+      ]
+    },
+    {
+      "text": "No concrete step to prevent another delay, only better reporting",
+      "evidence_turns": [
+        4
+      ]
+    }
+  ],
+  "unanswered_objections": []
+}

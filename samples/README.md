@@ -7,9 +7,12 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 | `proposals/billing_migration.txt` | a short proposal with deliberate weak points (no budget breakdown, no risks, single vendor) |
 | `personas/ms_verma_strict.json` | a persona (validated against `PersonaConfig`) |
 | `scenarios/vendor_delay.json` | a scenario with objections and a good-answer checklist (validated against `ScenarioConfig`) |
-| `results/vendor_delay_result.json` | an example of the program's result format (validated against `RoleplayResult`) |
-| `scoring/default.json` | a scoring profile (validated against `ScoringConfig`); not used by the API until scoring is built |
+| `results/llm_output.json` | raw criterion scores and evidence returned by the scoring LLM |
+| `results/PodC_Sample_Report_v4.md` | the required final Markdown report format |
+| `scoring/default.json` | a criterion rubric and provisional confidence settings (validated against `ScoringConfig`) |
 
-The three dimensions and all weights in `scoring/default.json` are **placeholders**, not from the BRD.
+The overall score is the weighted sum of criterion points multiplied by 100. Confidence weights,
+status cutoffs and other confidence parameters in `scoring/default.json` are provisional and must
+be calibrated against representative cases before production use.
 
 **TODO (Dev A):** add a PDF and a DOCX version of the proposal, plus one scanned page (an image of text) to exercise OCR.
