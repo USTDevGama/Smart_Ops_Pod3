@@ -1,6 +1,6 @@
 """initial schema: the 5 tables
 
-config_version, proposal, proposal_segment, session, turn. There is no user table: the login
+config_version, profile, profile_segment, session, turn. There is no user table: the login
 user is stored as plain text (`owner_ref`, `trainee_ref`). Scoring, review, reports and the logs
 get their own migration when those features are built.
 
@@ -48,7 +48,7 @@ def upgrade() -> None:
     )
 
     op.create_table(
-        "proposal",
+        "profile",
         _pk(),
         sa.Column("owner_ref", sa.String(64), nullable=False),
         sa.Column("filename", sa.String(255), nullable=False),
@@ -57,23 +57,23 @@ def upgrade() -> None:
         sa.Column("blob_uri", sa.String(500), nullable=False),
         sa.Column(
             "status",
-            _enum("proposal_status", "queued", "extracting", "ready", "failed"),
+            _enum("profile_status", "queued", "extracting", "ready", "failed"),
             nullable=False,
         ),
         sa.Column("brief", JSON_T),
         sa.Column("error", sa.Text()),
         _created(),
     )
-    op.create_index("ix_proposal_owner_ref", "proposal", ["owner_ref"])
-    op.create_index("ix_proposal_sha256", "proposal", ["sha256"])
+    op.create_index("ix_profile_owner_ref", "profile", ["owner_ref"])
+    op.create_index("ix_profile_sha256", "profile", ["sha256"])
 
     op.create_table(
-        "proposal_segment",
+        "profile_segment",
         _pk(),
         sa.Column(
-            "proposal_id",
+            "profile_id",
             sa.Uuid(),
-            sa.ForeignKey("proposal.id", ondelete="CASCADE"),
+            sa.ForeignKey("profile.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column("seq", sa.Integer(), nullable=False),
@@ -81,14 +81,14 @@ def upgrade() -> None:
         sa.Column("kind", _enum("segment_kind", "text", "ocr"), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("ocr_confidence", sa.Float()),
-        sa.UniqueConstraint("proposal_id", "seq"),
+        sa.UniqueConstraint("profile_id", "seq"),
     )
 
     op.create_table(
         "session",
         _pk(),
         sa.Column("trainee_ref", sa.String(64), nullable=False),
-        sa.Column("proposal_id", sa.Uuid(), sa.ForeignKey("proposal.id")),
+        sa.Column("profile_id", sa.Uuid(), sa.ForeignKey("profile.id")),
         sa.Column(
             "persona_version_id", sa.Uuid(), sa.ForeignKey("config_version.id"), nullable=False
         ),
@@ -138,5 +138,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for table in ("turn", "session", "proposal_segment", "proposal", "config_version"):
+    for table in ("turn", "session", "profile_segment", "profile", "config_version"):
         op.drop_table(table)

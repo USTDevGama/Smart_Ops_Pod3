@@ -25,7 +25,7 @@ any_user = require_role(Role.TRAINEE, Role.ADMIN)
 
 class NewSession(BaseModel):
     persona_key: str
-    proposal_id: UUID  # the trainee's ready profile
+    profile_id: UUID  # the trainee's ready profile
 
 
 class NewTurn(BaseModel):
@@ -51,7 +51,7 @@ class TurnOut(BaseModel):
 class SessionOut(BaseModel):
     id: UUID
     trainee_ref: str
-    proposal_id: UUID | None
+    profile_id: UUID | None
     persona: VersionRef
     demand: VersionRef | None
     status: SessionStatus
@@ -85,7 +85,7 @@ def _session_fields(loaded: Loaded) -> dict:
     return {
         "id": s.id,
         "trainee_ref": s.trainee_ref,
-        "proposal_id": s.proposal_id,
+        "profile_id": s.profile_id,
         "persona": VersionRef(
             key=loaded.persona_version.key, version_no=loaded.persona_version.version_no
         ),
@@ -118,7 +118,7 @@ def create_session(
     engine: TurnEngine = Depends(get_engine),
 ):
     """Start a chat on a ready profile: pins the persona and demand, and the client speaks first."""
-    loaded = service.start_session(db, engine, user, body.persona_key, body.proposal_id)
+    loaded = service.start_session(db, engine, user, body.persona_key, body.profile_id)
     return _detail(loaded, user)
 
 

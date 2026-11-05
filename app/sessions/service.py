@@ -24,7 +24,7 @@ from app.schemas import (
 from app.schemas.enums import (
     ConfigKind,
     EndReason,
-    ProposalStatus,
+    ProfileStatus,
     Role,
     SessionStatus,
     TurnRole,
@@ -57,15 +57,15 @@ class Loaded:
         )
         self.brief: Brief | None = None
         self.segment_ids: set[str] = set()
-        if session.proposal_id:
-            proposal = db.get(m.Proposal, session.proposal_id)
-            if proposal and proposal.brief:
-                self.brief = Brief.model_validate(proposal.brief)
+        if session.profile_id:
+            profile = db.get(m.Profile, session.profile_id)
+            if profile and profile.brief:
+                self.brief = Brief.model_validate(profile.brief)
             self.segment_ids = {
                 str(i)
                 for i in db.scalars(
-                    select(m.ProposalSegment.id).where(
-                        m.ProposalSegment.proposal_id == session.proposal_id
+                    select(m.ProfileSegment.id).where(
+                        m.ProfileSegment.profile_id == session.profile_id
                     )
                 )
             }
@@ -114,7 +114,7 @@ def _ask_engine(call: Callable[..., TurnOutput], *args) -> TurnOutput:
 
 
 def _real_refs(refs, valid: set[str]) -> list[str]:
-    """Keep only citations that point at real chunks of this session's proposal."""
+    """Keep only citations that point at real chunks of this session's profile."""
     return [str(r) for r in refs if str(r) in valid]
 
 
@@ -123,7 +123,7 @@ def start_session(
     engine: TurnEngine,
     user: CurrentUser,
     persona_key: str,
-    proposal_id: UUID,
+    profile_id: UUID,
 ) -> Loaded:
     persona = latest_published(db, ConfigKind.PERSONA, persona_key)
     if persona is None:
@@ -133,15 +133,15 @@ def start_session(
         raise HTTPException(status.HTTP_409_CONFLICT, "no project demand has been published")
     if not published(db, ConfigKind.SCENARIO):
         raise HTTPException(status.HTTP_409_CONFLICT, "no scenarios have been loaded")
-    proposal = db.get(m.Proposal, proposal_id)
-    if proposal is None or not can_see(user, proposal.owner_ref):
+    profile = db.get(m.Profile, profile_id)
+    if profile is None or not can_see(user, profile.owner_ref):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
-    if proposal.status != ProposalStatus.READY:
+    if profile.status != ProfileStatus.READY:
         raise HTTPException(status.HTTP_409_CONFLICT, "the profile is not ready yet")
 
     session = m.RoleplaySession(
         trainee_ref=user.user_ref,
-        proposal_id=proposal_id,
+        profile_id=profile_id,
         persona_version_id=persona.id,
         demand_version_id=demand.id,
         status=SessionStatus.ACTIVE,

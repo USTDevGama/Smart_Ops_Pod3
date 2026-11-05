@@ -98,6 +98,21 @@ def test_the_demand_is_a_setting_with_its_own_shape(api):
     assert refused.status_code == 422
 
 
+def test_scenarios_cannot_be_created_or_edited_by_hand(api):
+    api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
+    scenario = SCENARIOS["scenarios"][0]
+    base = "/api/v1/admin/config/scenario"
+    calls = [
+        api.client.post(base, headers=ADMIN, json={"key": "new", "config": scenario}),
+        api.client.post(f"{base}/vd-01/versions", headers=ADMIN, json={"config": scenario}),
+        api.client.put(f"{base}/vd-01/versions/1", headers=ADMIN, json={"config": scenario}),
+        api.client.post(f"{base}/vd-01/versions/1/publish", headers=ADMIN),
+    ]
+    assert [c.status_code for c in calls] == [422, 422, 422, 422]
+    assert api.client.get(base, headers=ADMIN).status_code == 200  # reading is still fine
+    assert api.client.get(f"{base}/vd-01/versions/1", headers=ADMIN).status_code == 200
+
+
 def test_scenarios_are_loaded_once_in_bulk(api):
     first = api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
     assert first.status_code == 200

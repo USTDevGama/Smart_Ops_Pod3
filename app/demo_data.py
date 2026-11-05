@@ -30,7 +30,7 @@ from app.schemas.enums import (
     ConfigStatus,
     EndReason,
     FileType,
-    ProposalStatus,
+    ProfileStatus,
     SegmentKind,
     SessionStatus,
     TurnRole,
@@ -92,46 +92,46 @@ def load_demo_data(db: Session) -> dict[str, int]:
     db.add_all([persona, scenario, demand])
     db.flush()
 
-    # --- an uploaded proposal, cut into two citable chunks ---------------------------------
-    raw = (SAMPLES / "proposals" / "billing_migration.txt").read_bytes()
+    # --- an uploaded profile, cut into two citable chunks ---------------------------------
+    raw = (SAMPLES / "profiles" / "sample_resume.txt").read_bytes()
     blocks = [b.strip() for b in raw.decode("utf-8").split("\n\n") if b.strip()]
-    budget_text = next(b for b in blocks if b.startswith("4. Budget"))
-    vendor_text = next(b for b in blocks if b.startswith("6. Vendors"))
-    seg_budget, seg_vendor = _id("seg-budget"), _id("seg-vendor")
+    experience_text = next(b for b in blocks if b.startswith("2. Experience"))
+    projects_text = next(b for b in blocks if b.startswith("4. Projects"))
+    seg_experience, seg_projects = _id("seg-experience"), _id("seg-projects")
     brief = Brief(
-        summary="Six-month, $400,000 migration of billing to microservices with three teams.",
+        summary="Backend engineer, three years of Java and Spring Boot, has led a small team.",
         items=[
-            BriefItem(kind="weak_point", segment_ids=[seg_budget],
-                      text="The detailed budget breakdown is deferred until after approval"),
-            BriefItem(kind="risk", segment_ids=[seg_vendor],
-                      text="CloudPay is the only payment gateway and its contract is not signed"),
+            BriefItem(kind="claim", segment_ids=[seg_experience],
+                      text="Led a six-month billing rewrite with three developers"),
+            BriefItem(kind="weak_point", segment_ids=[seg_projects],
+                      text="Says the client was told the same week, but gives no dates"),
         ],
     )
     sha = hashlib.sha256(raw).hexdigest()
-    proposal = m.Proposal(
-        id=_id("proposal"), owner_ref=trainee_ref, filename="billing_migration.txt",
+    profile = m.Profile(
+        id=_id("profile"), owner_ref=trainee_ref, filename="sample_resume.txt",
         file_type=FileType.TXT, sha256=sha, blob_uri=f"storage/{sha[:12]}.txt",
-        status=ProposalStatus.READY, brief=brief.model_dump(mode="json"), created_at=_at(25),
+        status=ProfileStatus.READY, brief=brief.model_dump(mode="json"), created_at=_at(25),
     )
-    db.add(proposal)
+    db.add(profile)
     db.flush()
     db.add_all([
-        m.ProposalSegment(id=seg_budget, proposal_id=proposal.id, seq=1, page=1,
-                          kind=SegmentKind.TEXT, text=budget_text),
-        m.ProposalSegment(id=seg_vendor, proposal_id=proposal.id, seq=2, page=1,
-                          kind=SegmentKind.TEXT, text=vendor_text),
+        m.ProfileSegment(id=seg_experience, profile_id=profile.id, seq=1, page=1,
+                          kind=SegmentKind.TEXT, text=experience_text),
+        m.ProfileSegment(id=seg_projects, profile_id=profile.id, seq=2, page=1,
+                          kind=SegmentKind.TEXT, text=projects_text),
     ])
     db.flush()
 
     # --- two sessions on the profile: S1 finished, S2 still open -----------------------------
     s1 = m.RoleplaySession(
-        id=_id("session-1"), trainee_ref=trainee_ref, proposal_id=proposal.id,
+        id=_id("session-1"), trainee_ref=trainee_ref, profile_id=profile.id,
         persona_version_id=persona.id, demand_version_id=demand.id,
         status=SessionStatus.ENDED,
         end_reason=EndReason.TRAINEE_ENDED, started_at=_at(0), ended_at=_at(6),
     )
     s2 = m.RoleplaySession(
-        id=_id("session-2"), trainee_ref=trainee_ref, proposal_id=proposal.id,
+        id=_id("session-2"), trainee_ref=trainee_ref, profile_id=profile.id,
         persona_version_id=persona.id, demand_version_id=demand.id,
         status=SessionStatus.ACTIVE,
         started_at=_at(30),
@@ -166,11 +166,11 @@ def load_demo_data(db: Session) -> dict[str, int]:
         )
     s2_opening = m.Turn(
         id=_id("s2-turn-0"), session_id=s2.id, idx=0, role=TurnRole.PERSONA, escalation_level=1,
-        content=("Your proposal says a detailed budget breakdown will be shared after approval. "
-                 "Why should I approve $400,000 without one?"),
-        refs=[str(seg_budget)], created_at=_at(30, 5),
+        content=("Your profile says the payments service shipped two weeks late. "
+                 "When did you tell the client, and what did it cost them?"),
+        refs=[str(seg_experience)], created_at=_at(30, 5),
     )
-    assert "detailed breakdown" in budget_text  # the chunk it cites really says this
+    assert "two weeks late" in experience_text  # the chunk it cites really says this
     db.add_all([*turns.values(), s2_opening])
     db.flush()
 

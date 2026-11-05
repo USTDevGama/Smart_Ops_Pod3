@@ -54,7 +54,7 @@ def chat(api):
 
 
 def _start(api, headers=ANNA, **extra):
-    body = START | {"proposal_id": ready_profile(api, headers["X-Dev-User"])} | extra
+    body = START | {"profile_id": ready_profile(api, headers["X-Dev-User"])} | extra
     return api.client.post("/api/v1/sessions", headers=headers, json=body)
 
 
@@ -190,28 +190,28 @@ def test_the_engine_is_given_the_demand_and_every_scenario(chat):
 
 def test_invented_citations_are_dropped_and_real_ones_kept(chat):
     api, use = chat
-    upload = api.client.post("/api/v1/proposals", headers=ANNA,
+    upload = api.client.post("/api/v1/profiles", headers=ANNA,
                              files={"file": ("p.txt", b"Budget\n\nVendor risk")})
-    proposal_id = upload.json()["id"]
+    profile_id = upload.json()["id"]
     with api.factory() as db:
         placeholder.ingest(db, api.queued[-1], api.store)
-    real = api.client.get(f"/api/v1/proposals/{proposal_id}/segments", headers=ANNA).json()[0]["id"]
+    real = api.client.get(f"/api/v1/profiles/{profile_id}/segments", headers=ANNA).json()[0]["id"]
     use([output(refs=[real, str(uuid4())])])
-    session_id = _start(api, proposal_id=proposal_id).json()["id"]
+    session_id = _start(api, profile_id=profile_id).json()["id"]
     assert _get(api, session_id).json()["turns"][0]["refs"] == []  # the opening cited nothing
     _send(api, session_id)
     persona_turn = _get(api, session_id).json()["turns"][-1]
     assert persona_turn["refs"] == [real]
 
 
-def test_a_session_cannot_start_on_an_unready_or_foreign_proposal(chat):
+def test_a_session_cannot_start_on_an_unready_or_foreign_profile(chat):
     api, use = chat
     use([])
-    upload = api.client.post("/api/v1/proposals", headers=ANNA,
+    upload = api.client.post("/api/v1/profiles", headers=ANNA,
                              files={"file": ("p.txt", b"Budget")})
-    proposal_id = upload.json()["id"]  # still queued
-    assert _start(api, proposal_id=proposal_id).status_code == 409
-    assert _start(api, headers=BEN, proposal_id=proposal_id).status_code == 404
+    profile_id = upload.json()["id"]  # still queued
+    assert _start(api, profile_id=profile_id).status_code == 409
+    assert _start(api, headers=BEN, profile_id=profile_id).status_code == 404
 
 
 def test_starting_needs_a_published_persona(api):

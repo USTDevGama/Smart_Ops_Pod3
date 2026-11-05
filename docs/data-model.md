@@ -20,11 +20,11 @@ The call changed what the system is for. It is a strict-client round, in effect 
 | The **demand** comes from the Gama team as master data. The agent always knows it | New `config_version` kind `demand`. **One demand for everyone**: the most recently saved published one is used. `session.demand_version_id` records which version a chat started with |
 | **Scenarios are not configured by an admin.** The agent works out the level of questioning itself, from a one-time dataset | Scenarios stay in `config_version` (our database), loaded in bulk. The trainee no longer picks one, so `session.scenario_version_id` is now **empty for new sessions** (the column is kept, optional) |
 | A chat **ends only at `max_turns`** (plus `grace_turns` while answers improve), or when someone ends it | The "all checklist items covered" ending was removed. `end_reason` `concerns_resolved` is no longer produced |
-| The profile is the main input of a chat | `session.proposal_id` is still empty-able in the table (old rows), but the API now **requires** a ready one |
+| The trainee's **profile** (resume) is the main input of a chat. The old `proposal` tables and endpoints are renamed to `profile` | `profile` and `profile_segment` replace `proposal` and `proposal_segment`; `session.profile_id` replaces `proposal_id`. The column is still empty-able, but the API **requires** a ready profile |
 | The **persona** stays configurable | No change |
 
-**Not built yet**
-- The trainee uploads **only a profile (resume)**: 1 to 3 pages, PDF, DOCX or TXT, no images, figures or scans. So `proposal` is really a profile, and OCR is not needed (`proposal_segment.kind = ocr` and `ocr_confidence` stay unused). Renaming `proposal` to `profile` (and the `/proposals` paths to `/profiles`) is deferred until Kedar agrees, because the ingestion code he is writing uses the current names.
+**Not built yet** (Kedar's part, plus one open question)
+- The trainee uploads **only a profile (resume)**: 1 to 3 pages, PDF, DOCX or TXT, no images, figures or scans. The tables and API are named `profile` for this. OCR is not needed, so `profile_segment.kind = ocr` and `ocr_confidence` stay unused for now.
 - The `brief` should become a short profile summary (skills, roles, projects, years) instead of "claims and weak points". That is Kedar's part.
 - Whether the scenario dataset should instead live in the agent's own store (Shubra's side). For now it is in our table and is passed to the agent.
 
@@ -32,8 +32,8 @@ The call changed what the system is for. It is a strict-client round, in effect 
 ```mermaid
 erDiagram
   config_version ||--o{ session : "persona and demand versions"
-  proposal ||--o{ proposal_segment : "split into chunks"
-  proposal |o--o{ session : "optional"
+  profile ||--o{ profile_segment : "split into chunks"
+  profile |o--o{ session : "optional"
   session ||--o{ turn : "chat messages"
 ```
 
@@ -50,9 +50,9 @@ One table holds all three kinds, because they work the same way: each change sav
 | `config` | All the settings as JSON. The shape is checked by `PersonaConfig`, `ScenarioConfig` or `DemandConfig` before saving. |
 | `created_at` | When this version was saved. |
 
-## The uploaded proposal
+## The uploaded profile
 
-### `proposal` - an uploaded file and what we learned from it
+### `profile` - an uploaded file and what we learned from it
 | Column | Why it is there |
 |---|---|
 | `owner_ref` | Whose file it is (the login user). Access control: a trainee sees only their own. |
@@ -60,16 +60,16 @@ One table holds all three kinds, because they work the same way: each change sav
 | `sha256` | A fingerprint of the file. Spots a duplicate upload so we reuse the earlier summary. |
 | `blob_uri` | Where the original file is stored (a folder in development). The file is kept out of the database. |
 | `status` | `queued`, `extracting`, `ready` or `failed`. The UI watches this. |
-| `brief` | The structured summary of the proposal (claims, weak points, each citing chunk ids), as JSON. Empty until `ready`. |
+| `brief` | The structured summary of the profile (claims, weak points, each citing chunk ids), as JSON. Empty until `ready`. |
 | `error` | Why it failed, if it did. |
 | `created_at` | Also starts the 30-day deletion clock. |
 
-### `proposal_segment` - the proposal cut into numbered chunks
+### `profile_segment` - the profile cut into numbered chunks
 Each chunk can be pointed at, so the persona can cite one and code can check it exists.
 | Column | Why it is there |
 |---|---|
-| `proposal_id` -> `proposal` | The proposal it belongs to. Deleted along with it. |
-| `seq` | The chunk's order (unique within a proposal). |
+| `profile_id` -> `profile` | The profile it belongs to. Deleted along with it. |
+| `seq` | The chunk's order (unique within a profile). |
 | `page` | The page number (1 for plain text files). |
 | `kind` | `text` (read directly) or `ocr` (read from an image of text). |
 | `text` | The chunk itself. |
@@ -81,7 +81,7 @@ Each chunk can be pointed at, so the persona can cite one and code can check it 
 | Column | Why it is there |
 |---|---|
 | `trainee_ref` | Who is playing (the login user). |
-| `proposal_id` -> `proposal` | The trainee's profile. The API requires one that is `ready`; the column can be empty only on old rows. |
+| `profile_id` -> `profile` | The trainee's profile. The API requires one that is `ready`; the column can be empty only on old rows. |
 | `persona_version_id` -> `config_version` | The exact persona version used. |
 | `demand_version_id` -> `config_version` | The exact demand version the chat started with. May be empty. |
 | `scenario_version_id` -> `config_version` | No longer set: the agent picks scenarios itself. Old sessions keep their value. |
@@ -98,7 +98,7 @@ The full record of the conversation, and what any later score will be traced bac
 | `role` | `persona` (the AI client, called "client" in the result format) or `trainee`. |
 | `content` | The message text. |
 | `escalation_level` | How tough the client was in that reply, step 1 to 4. Only on persona rows. Also gives the "current level" without extra state. |
-| `refs` | The proposal chunks the client's question relied on. Only on persona rows. Code keeps only real chunk ids. |
+| `refs` | The profile chunks the client's question relied on. Only on persona rows. Code keeps only real chunk ids. |
 | `evaluation` | The agent's judgement of a trainee answer: quality, which checklist items it met, whether it was evasive, a short quote. Only on trainee rows. Admins can see it; trainees cannot. |
 | `idempotency_key` | A token the app sends with each message so a retry cannot create a duplicate. Trainee rows only. |
 | `created_at` | Order and timing. |
@@ -109,7 +109,7 @@ The full record of the conversation, and what any later score will be traced bac
 - A separate copy of the "current escalation level" or "open checklist items". They are worked out from the saved turns, so there is nothing to get out of sync.
 
 ## Deletion
-A nightly job (not written yet) will delete data 30 days after a session ends, or 30 days after an upload that was never used. Deleting a session removes its turns. A proposal still used by a session is never deleted, and the API refuses to delete it.
+A nightly job (not written yet) will delete data 30 days after a session ends, or 30 days after an upload that was never used. Deleting a session removes its turns. A profile still used by a session is never deleted, and the API refuses to delete it.
 
 ## Looking at the tables on your machine
 | Option | Needs Docker? | How |

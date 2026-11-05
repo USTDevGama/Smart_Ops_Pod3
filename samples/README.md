@@ -4,7 +4,7 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 
 | File | Use |
 |---|---|
-| `proposals/billing_migration.txt` | a sample upload (the trainee profile once the team agrees the rename; today a short proposal text) |
+| `profiles/sample_resume.txt` | a made-up trainee profile (resume) of one page, the kind of file a trainee uploads |
 | `personas/ms_verma_strict.json` | a persona (validated against `PersonaConfig`) |
 | `scenarios/vendor_delay.json` | a scenario with objections and a good-answer checklist (validated against `ScenarioConfig`); the file shape is what `POST /admin/scenarios/import` takes |
 | `demand/project_demand.json` | the project demand: what the project needs and the client expects (validated against `DemandConfig`) |
@@ -13,4 +13,4 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 
 The three dimensions and all weights in `scoring/default.json` are **placeholders**, not from the BRD.
 
-**TODO (Dev A):** add a PDF and a DOCX version of the proposal, plus one scanned page (an image of text) to exercise OCR.
+**TODO (Dev A):** add a PDF and a DOCX version of the profile, plus one scanned page (an image of text) to exercise OCR.

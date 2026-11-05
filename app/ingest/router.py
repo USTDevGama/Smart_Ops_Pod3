@@ -1,4 +1,4 @@
-"""Proposal endpoints (upload, status, chunks, delete). Reading the file is the worker's job."""
+"""Profile endpoints (upload, status, chunks, delete). Reading the file is the worker's job."""
 
 import hashlib
 import os
@@ -14,11 +14,11 @@ from app.api.deps import CurrentUser, Paging, can_see, get_db, paging, require_r
 from app.config import get_settings
 from app.db import models as m
 from app.schemas import Brief, Segment
-from app.schemas.enums import FileType, ProposalStatus, Role
+from app.schemas.enums import FileType, ProfileStatus, Role
 from app.storage import BlobStore, get_blob_store
 from app.workers.dispatch import enqueue_ingest
 
-router = APIRouter(prefix="/api/v1", tags=["proposals"])
+router = APIRouter(prefix="/api/v1", tags=["profiles"])
 
 # Built once at module level (ruff B008).
 any_user = require_role(Role.TRAINEE, Role.ADMIN)
@@ -26,17 +26,17 @@ any_user = require_role(Role.TRAINEE, Role.ADMIN)
 _SUFFIX = {".pdf": FileType.PDF, ".docx": FileType.DOCX, ".txt": FileType.TXT}
 
 
-class ProposalOut(BaseModel):
+class ProfileOut(BaseModel):
     id: UUID
     filename: str
     file_type: FileType
-    status: ProposalStatus
+    status: ProfileStatus
     error: str | None
     created_at: datetime
     owner_ref: str
 
 
-class ProposalDetail(ProposalOut):
+class ProfileDetail(ProfileOut):
     brief: Brief | None
     segment_count: int
 
@@ -63,35 +63,35 @@ def detect_type(filename: str, data: bytes) -> FileType:
     return file_type
 
 
-def _owned(db: Session, proposal_id: UUID, user: CurrentUser) -> m.Proposal:
-    proposal = db.get(m.Proposal, proposal_id)
-    if proposal is None or not can_see(user, proposal.owner_ref):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "proposal not found")
-    return proposal
+def _owned(db: Session, profile_id: UUID, user: CurrentUser) -> m.Profile:
+    profile = db.get(m.Profile, profile_id)
+    if profile is None or not can_see(user, profile.owner_ref):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
+    return profile
 
 
-def _detail(db: Session, proposal: m.Proposal) -> ProposalDetail:
+def _detail(db: Session, profile: m.Profile) -> ProfileDetail:
     count = db.scalar(
-        select(func.count()).select_from(m.ProposalSegment).where(
-            m.ProposalSegment.proposal_id == proposal.id
+        select(func.count()).select_from(m.ProfileSegment).where(
+            m.ProfileSegment.profile_id == profile.id
         )
     )
-    return ProposalDetail(
-        **ProposalOut.model_validate(proposal, from_attributes=True).model_dump(),
-        brief=proposal.brief,
+    return ProfileDetail(
+        **ProfileOut.model_validate(profile, from_attributes=True).model_dump(),
+        brief=profile.brief,
         segment_count=count or 0,
     )
 
 
-@router.post("/proposals", response_model=ProposalDetail, status_code=202)
-def upload_proposal(
+@router.post("/profiles", response_model=ProfileDetail, status_code=202)
+def upload_profile(
     response: Response,
     file: UploadFile,
     user: CurrentUser = Depends(any_user),
     db: Session = Depends(get_db),
     store: BlobStore = Depends(get_blob_store),
 ):
-    """Save the file, queue the ingest job, return 202. Poll GET /proposals/{id} until ready."""
+    """Save the file, queue the ingest job, return 202. Poll GET /profiles/{id} until ready."""
     limit = get_settings().max_upload_mb * 1024 * 1024
     data = file.file.read(limit + 1)
     if len(data) > limit:
@@ -103,85 +103,85 @@ def upload_proposal(
     sha = hashlib.sha256(data).hexdigest()
 
     same = db.scalar(
-        select(m.Proposal).where(
-            m.Proposal.owner_ref == user.user_ref,
-            m.Proposal.sha256 == sha,
-            m.Proposal.status != ProposalStatus.FAILED,
+        select(m.Profile).where(
+            m.Profile.owner_ref == user.user_ref,
+            m.Profile.sha256 == sha,
+            m.Profile.status != ProfileStatus.FAILED,
         )
     )
     if same is not None:  # the same file again: reuse the earlier one and its brief
         response.status_code = status.HTTP_200_OK
         return _detail(db, same)
 
-    proposal = m.Proposal(
+    profile = m.Profile(
         owner_ref=user.user_ref,
         filename=filename,
         file_type=file_type,
         sha256=sha,
         blob_uri=store.save(data, f".{file_type.value}"),
-        status=ProposalStatus.QUEUED,
+        status=ProfileStatus.QUEUED,
     )
-    db.add(proposal)
+    db.add(profile)
     db.commit()
-    enqueue_ingest(proposal.id)
-    db.refresh(proposal)
-    return _detail(db, proposal)
+    enqueue_ingest(profile.id)
+    db.refresh(profile)
+    return _detail(db, profile)
 
 
-@router.get("/proposals", response_model=list[ProposalOut])
-def list_proposals(
+@router.get("/profiles", response_model=list[ProfileOut])
+def list_profiles(
     owner_ref: str | None = None,
     page: Paging = Depends(paging),
     user: CurrentUser = Depends(any_user),
     db: Session = Depends(get_db),
 ):
-    query = select(m.Proposal).order_by(m.Proposal.created_at.desc())
+    query = select(m.Profile).order_by(m.Profile.created_at.desc())
     if user.role == Role.ADMIN:
         if owner_ref:
-            query = query.where(m.Proposal.owner_ref == owner_ref)
+            query = query.where(m.Profile.owner_ref == owner_ref)
     else:
-        query = query.where(m.Proposal.owner_ref == user.user_ref)
+        query = query.where(m.Profile.owner_ref == user.user_ref)
     return db.scalars(query.limit(page.limit).offset(page.offset)).all()
 
 
-@router.get("/proposals/{proposal_id}", response_model=ProposalDetail)
-def get_proposal(
-    proposal_id: UUID, user: CurrentUser = Depends(any_user), db: Session = Depends(get_db)
+@router.get("/profiles/{profile_id}", response_model=ProfileDetail)
+def get_profile(
+    profile_id: UUID, user: CurrentUser = Depends(any_user), db: Session = Depends(get_db)
 ):
-    return _detail(db, _owned(db, proposal_id, user))
+    return _detail(db, _owned(db, profile_id, user))
 
 
-@router.get("/proposals/{proposal_id}/segments", response_model=list[Segment])
+@router.get("/profiles/{profile_id}/segments", response_model=list[Segment])
 def list_segments(
-    proposal_id: UUID, user: CurrentUser = Depends(any_user), db: Session = Depends(get_db)
+    profile_id: UUID, user: CurrentUser = Depends(any_user), db: Session = Depends(get_db)
 ):
     """The numbered chunks, so the UI can show the text a persona question cites."""
-    _owned(db, proposal_id, user)
+    _owned(db, profile_id, user)
     return db.scalars(
-        select(m.ProposalSegment)
-        .where(m.ProposalSegment.proposal_id == proposal_id)
-        .order_by(m.ProposalSegment.seq)
+        select(m.ProfileSegment)
+        .where(m.ProfileSegment.profile_id == profile_id)
+        .order_by(m.ProfileSegment.seq)
     ).all()
 
 
-@router.delete("/proposals/{proposal_id}", status_code=204)
-def delete_proposal(
-    proposal_id: UUID,
+@router.delete("/profiles/{profile_id}", status_code=204)
+def delete_profile(
+    profile_id: UUID,
     user: CurrentUser = Depends(any_user),
     db: Session = Depends(get_db),
     store: BlobStore = Depends(get_blob_store),
 ):
-    proposal = _owned(db, proposal_id, user)
+    profile = _owned(db, profile_id, user)
     in_use = db.scalar(
         select(func.count()).select_from(m.RoleplaySession).where(
-            m.RoleplaySession.proposal_id == proposal.id
+            m.RoleplaySession.profile_id == profile.id
         )
     )
     if in_use:
-        raise HTTPException(status.HTTP_409_CONFLICT, "a session uses this proposal")
-    db.execute(delete(m.ProposalSegment).where(m.ProposalSegment.proposal_id == proposal.id))
-    uri = proposal.blob_uri
-    db.delete(proposal)
+        raise HTTPException(status.HTTP_409_CONFLICT, "a session uses this profile")
+    db.execute(delete(m.ProfileSegment).where(m.ProfileSegment.profile_id == profile.id))
+    uri = profile.blob_uri
+    db.delete(profile)
     db.commit()
     store.delete(uri)
     return Response(status_code=204)

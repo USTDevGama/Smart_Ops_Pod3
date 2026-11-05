@@ -6,7 +6,7 @@ from sqlalchemy.schema import CreateTable
 from app.db.base import Base
 from app.db.models import (
     ConfigVersion,
-    Proposal,
+    Profile,
     RoleplaySession,
     Turn,
 )
@@ -14,12 +14,12 @@ from app.schemas.enums import (
     ConfigKind,
     ConfigStatus,
     FileType,
-    ProposalStatus,
+    ProfileStatus,
     SessionStatus,
     TurnRole,
 )
 
-EXPECTED_TABLES = {"config_version", "proposal", "proposal_segment", "session", "turn"}
+EXPECTED_TABLES = {"config_version", "profile", "profile_segment", "session", "turn"}
 
 
 def test_exactly_the_planned_tables():
@@ -31,7 +31,7 @@ def test_every_table_compiles_for_postgres():
         assert "CREATE TABLE" in str(CreateTable(table).compile(dialect=postgresql.dialect()))
 
 
-def _chain(db, with_proposal: bool = True) -> tuple[RoleplaySession, Turn]:
+def _chain(db, with_profile: bool = True) -> tuple[RoleplaySession, Turn]:
     persona = ConfigVersion(
         kind=ConfigKind.PERSONA, key="verma", version_no=1, status=ConfigStatus.PUBLISHED, config={}
     )
@@ -44,22 +44,22 @@ def _chain(db, with_proposal: bool = True) -> tuple[RoleplaySession, Turn]:
     )
     db.add_all([persona, scenario])
     db.flush()
-    proposal_id = None
-    if with_proposal:
-        proposal = Proposal(
+    profile_id = None
+    if with_profile:
+        profile = Profile(
             owner_ref="dev-user",
             filename="p.txt",
             file_type=FileType.TXT,
             sha256="0" * 64,
             blob_uri="storage/p.txt",
-            status=ProposalStatus.READY,
+            status=ProfileStatus.READY,
         )
-        db.add(proposal)
+        db.add(profile)
         db.flush()
-        proposal_id = proposal.id
+        profile_id = profile.id
     session = RoleplaySession(
         trainee_ref="dev-user",
-        proposal_id=proposal_id,
+        profile_id=profile_id,
         persona_version_id=persona.id,
         scenario_version_id=scenario.id,
         status=SessionStatus.ACTIVE,
@@ -95,6 +95,6 @@ def test_escalation_level_is_limited_to_steps_1_to_4(db, bad_level):
         db.flush()
 
 
-def test_a_session_can_run_without_a_proposal(db):
-    session, _ = _chain(db, with_proposal=False)
-    assert session.proposal_id is None
+def test_a_session_can_run_without_a_profile(db):
+    session, _ = _chain(db, with_profile=False)
+    assert session.profile_id is None

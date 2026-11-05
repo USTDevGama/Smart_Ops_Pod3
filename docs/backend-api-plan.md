@@ -5,7 +5,7 @@ The scaffold is pushed. The team then narrowed what we build next:
 - **Kedar** owns the ingestion work (parsing, OCR, the brief) and the **UI**.
 - **Shubra** owns the **agent**: how one client reply is produced. It is not yet decided whether that is LangGraph or a plain LLM call with a prompt (LangChain), so our code must not depend on that choice.
 - **Disha** owns scoring, review and reports. We only list placeholder endpoints for those.
-- **We** build the backend APIs and their logic: settings, proposals, sessions, and the chat plumbing (storing turns, limits, safety checks). We call the agent through a small fixed interface.
+- **We** build the backend APIs and their logic: settings, profiles, sessions, and the chat plumbing (storing turns, limits, safety checks). We call the agent through a small fixed interface.
 - These tables are **not needed now** and were removed from the schema: `app_user`, `audit_log`, `llm_call_log`, `assessment`, `assessment_evidence`, `review` (and `report`, which only pointed at `assessment`). The scoring-profile setting and `session.scoring_profile_version_id` were dropped too; scoring will add them back when it is built.
 
 The earlier design still holds: one LLM call per chat turn, plain code enforces the rules, no RAG, trainee text is treated as data, nothing important lives only in Redis.
@@ -15,27 +15,27 @@ The call clarified that the trainee uploads only a **profile (resume)**, the **d
 
 | Area | Now |
 |---|---|
-| Settings: persona | unchanged: create, version, edit, publish |
+| Settings: persona | unchanged: create, version, edit, publish. Writes accept the kinds `persona` and `demand` only |
 | Settings: demand | new kind `demand` (`DemandConfig`: name, description, stack, expectations). Same admin endpoints as persona. One demand is in force: the most recently saved published one |
 | Settings: scenario | `POST /admin/scenarios/import` loads the whole dataset in one go (same shape as the seed file, `{"scenarios": [...]}`), published straight away; a new id is created, a changed one becomes the next version, an identical one is left alone. `GET /scenarios` is **removed**. The generic admin list and read endpoints still work for scenarios |
-| `POST /sessions` | body `{persona_key, proposal_id}`. `proposal_id` is **required** and must be the caller's and `ready`. 409 if no demand is published or no scenarios are loaded. `scenario_key` is gone |
+| `POST /sessions` | body `{persona_key, profile_id}`. `profile_id` is **required** and must be the caller's and `ready`. 409 if no demand is published or no scenarios are loaded. `scenario_key` is gone |
 | Session responses | `demand` (key and version) replaces `scenario` |
 | Ending | only `max_turns` (plus `grace_turns` while answers improve), the trainee ending it, or an admin ending it. `concerns_resolved` is no longer produced |
 | Agent interface (`TurnEngine`, Shubra) | `SessionContext` now holds `demand`, **all** published `scenarios`, the profile summary (`brief`), the turns, the level and `turns_used`. The single `scenario` and `open_checklist` are gone. Shubra needs to see this before building on it |
 
-Not done yet: renaming `proposal` to `profile` and `/proposals` to `/profiles` (waiting for Kedar, whose ingestion code uses the current names), and the profile-shaped `brief`.
+Also renamed: the proposal endpoints are now **`/profiles`** (`POST`, `GET`, `GET /{id}`, `GET /{id}/segments`, `DELETE /{id}`), the tables are `profile` and `profile_segment`, and the background job is `ingest_profile`. Kedar needs to use these names. Still to do (Kedar): a profile-shaped `brief` (skills, roles, projects, years) instead of claims and weak points.
 
 ## 1. Database trim
 | Change | Detail |
 |---|---|
 | Dropped 7 tables | `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log` |
 | `session.trainee_id` becomes `trainee_ref` | plain text: the login user (`X-Dev-User` for now) |
-| `proposal.owner_id` becomes `owner_ref` | same |
+| `profile.owner_id` becomes `owner_ref` | same |
 | `session.scoring_profile_version_id` | dropped |
 | Scoring-profile settings | removed from `ConfigKind`; existing rows deleted by the migration. `ScoringConfig` stays in `app/schemas/config.py` for later |
 | Existing data | the new text columns are filled from `app_user.idp_sub` before the old columns are dropped. Uses batch mode so it also runs on SQLite. One-way: no downgrade |
 
-Left with 5 tables: `config_version`, `proposal`, `proposal_segment`, `session`, `turn`. See [data-model.md](data-model.md).
+Left with 5 tables: `config_version`, `profile`, `profile_segment`, `session`, `turn`. See [data-model.md](data-model.md).
 
 ## 2. Shared plumbing
 | Piece | File | What |
@@ -43,13 +43,13 @@ Left with 5 tables: `config_version`, `proposal`, `proposal_segment`, `session`,
 | Error format | `app/api/errors.py` | every error is `{type, title, status, detail}` |
 | Dependencies | `app/api/deps.py` | `get_db`, `get_llm`, `can_see` (trainees see their own rows, admins all), `paging` |
 | File storage | `app/storage.py` | `BlobStore` with `save`, `read`, `delete`; `LocalBlobStore` under `PODC_BLOB_DIR` |
-| Job dispatch | `app/workers/dispatch.py` | `enqueue_ingest(proposal_id)`; with `PODC_INGEST_INLINE=true` it runs the ingest inside the request (no Redis needed locally) |
+| Job dispatch | `app/workers/dispatch.py` | `enqueue_ingest(profile_id)`; with `PODC_INGEST_INLINE=true` it runs the ingest inside the request (no Redis needed locally) |
 
 ## 3. API (all under `/api/v1`)
 Roles are `trainee`, `admin` and `integrator`, sent as dev headers for now.
 
 ### 3.1 Settings (`app/api/admin_config.py`)
-Kinds: `persona`, `scenario` and `demand`. A body is validated with `PersonaConfig`, `ScenarioConfig` or `DemandConfig`. Scenarios are normally loaded with the import endpoint (see the update above).
+Kinds: `persona`, `scenario` and `demand`. A body is validated with `PersonaConfig`, `ScenarioConfig` or `DemandConfig`. Only `persona` and `demand` can be created, edited or published by hand (other kinds answer 422); scenarios are only loaded with the import endpoint, and can still be read.
 | Endpoint | Who | Does |
 |---|---|---|
 | `GET /personas` | trainee, admin | the **published** ones, so a trainee can start a session |
@@ -62,17 +62,17 @@ Kinds: `persona`, `scenario` and `demand`. A body is validated with `PersonaConf
 
 Invalid settings give 422 with the reasons (for example `min_turns cannot exceed max_turns`). Two admins saving at once is caught by the unique (kind, key, version_no) constraint and answers 409. A sandbox test chat is deferred.
 
-### 3.2 Proposals (`app/ingest/router.py`)
+### 3.2 Profiles (`app/ingest/router.py`)
 The endpoints and the glue are ours. Reading the file, OCR and the brief are Kedar's.
 | Endpoint | Who | Does |
 |---|---|---|
-| `POST /proposals` (multipart `file`) | trainee, admin | checks size (default 10 MB, else 413) and that the extension **and** first bytes agree for PDF, DOCX or TXT (else 415); the same file again by the same owner returns the existing proposal (200); otherwise stores the file, creates the row `queued`, queues the ingest job and returns **202** |
-| `GET /proposals/{id}` | owner, admin | status, error, brief when ready, segment count. The UI polls this. 404 for other people's rows |
-| `GET /proposals` | owner, admin | own list (admin: all, filter `owner_ref`) |
-| `GET /proposals/{id}/segments` | owner, admin | the numbered chunks, to show the text a client question cites |
-| `DELETE /proposals/{id}` | owner, admin | 409 if a session uses it; else removes chunks, file and row |
+| `POST /profiles` (multipart `file`) | trainee, admin | checks size (default 10 MB, else 413) and that the extension **and** first bytes agree for PDF, DOCX or TXT (else 415); the same file again by the same owner returns the existing profile (200); otherwise stores the file, creates the row `queued`, queues the ingest job and returns **202** |
+| `GET /profiles/{id}` | owner, admin | status, error, brief when ready, segment count. The UI polls this. 404 for other people's rows |
+| `GET /profiles` | owner, admin | own list (admin: all, filter `owner_ref`) |
+| `GET /profiles/{id}/segments` | owner, admin | the numbered chunks, to show the text a client question cites |
+| `DELETE /profiles/{id}` | owner, admin | 409 if a session uses it; else removes chunks, file and row |
 
-**Hand-off to Kedar.** `ingest_proposal(proposal_id)` (in `app/workers/tasks.py`) must set `status` to `extracting`, write `proposal_segment` rows, produce a `Brief` (`app/schemas/proposal.py`, every item citing real segment ids), save it on `proposal.brief`, and finish `ready`, or `failed` with `error`. Until then `app/ingest/placeholder.py` stands in: TXT only, one chunk per paragraph, a small brief from the first paragraphs.
+**Hand-off to Kedar.** `ingest_profile(profile_id)` (in `app/workers/tasks.py`) must set `status` to `extracting`, write `profile_segment` rows, produce a `Brief` (`app/schemas/profile.py`, every item citing real segment ids), save it on `profile.brief`, and finish `ready`, or `failed` with `error`. Until then `app/ingest/placeholder.py` stands in: TXT only, one chunk per paragraph, a small brief from the first paragraphs.
 
 ### 3.3 Sessions and chat (`app/sessions/`)
 Two layers keep us independent of how Shubra builds the agent:
@@ -89,7 +89,7 @@ class TurnEngine(Protocol):
 
 | Endpoint | Who | Does |
 |---|---|---|
-| `POST /sessions` | trainee, admin | body `{persona_key, proposal_id}`. Uses the latest **published** persona (404 if none) and the current demand. The profile must be the caller's and `ready` (409 if not). The client's opening message is saved as turn 0 |
+| `POST /sessions` | trainee, admin | body `{persona_key, profile_id}`. Uses the latest **published** persona (404 if none) and the current demand. The profile must be the caller's and `ready` (409 if not). The client's opening message is saved as turn 0 |
 | `GET /sessions`, `GET /sessions/{id}` | owner, admin | list (filter `status`; admin `trainee_ref`); detail with turns, current level, `turns_used`, `max_turns`. Only admins see each answer's `evaluation` |
 | `POST /sessions/{id}/turns` | owner | body `{content}`, header `Idempotency-Key` (required). Replies as a server-sent event stream: `message`, then `done` |
 | `POST /sessions/{id}/end` | owner, admin | ends the session (`trainee_ended`, or `admin_ended` when an admin ends someone else's). Repeating it is harmless. Calls the no-op `on_session_ended` hook where scoring plugs in |
@@ -98,7 +98,7 @@ class TurnEngine(Protocol):
 1. The session must be the caller's and active (404 / 409).
 2. If this `Idempotency-Key` was already used, return the stored reply; nothing is asked or saved again.
 3. Build the `SessionContext` from the database and call `engine.respond`. Any error gives 502 and **nothing is saved**, so a failed reply never uses up a turn.
-4. Keep only `refs` that are real chunks of this session's proposal.
+4. Keep only `refs` that are real chunks of this session's profile.
 5. Clamp the level: it moves at most one step from the previous level and stays within 1 to the persona's top step. The engine's own escalation logic is Shubra's; this only guarantees the rule.
 6. Save the trainee turn (with its evaluation) and the client turn in one transaction. Two simultaneous sends are stopped by the unique (session_id, idx) constraint (409).
 7. End the session if the trainee has used `max_turns` (plus `grace_turns` only while answers are improving), reason `turn_cap`.
@@ -116,7 +116,7 @@ Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers
 | Owner | Work |
 |---|---|
 | Dev D | the schema migration, shared plumbing, later the real LLM provider and background-job retries and schedules |
-| Dev A | proposal endpoints and glue |
+| Dev A | profile endpoints and glue |
 | Dev B | sessions and chat plumbing, the `TurnEngine` interface |
 | Dev C | settings endpoints |
 | Kedar | real ingestion (parsing, OCR, brief) and the UI |
@@ -132,6 +132,6 @@ Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers
 - Real login (the headers are a stand-in).
 
 ## 6. Assumptions to confirm
-- Kedar writes the real `ingest_proposal` body; we own the endpoints around it.
+- Kedar writes the real `ingest_profile` body; we own the endpoints around it.
 - Shubra agrees to the `TurnEngine` interface and the `SessionContext` fields.
 - The engine decides escalation from answer quality; the service only enforces the one-step limit and the turn limit.

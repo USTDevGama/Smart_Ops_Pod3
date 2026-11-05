@@ -7,10 +7,10 @@ from app.schemas.enums import SegmentKind
 
 
 class Segment(BaseModel):
-    """One citable chunk of the proposal (a `proposal_segment` row)."""
+    """One citable chunk of the profile (a `profile_segment` row)."""
 
     id: UUID
-    proposal_id: UUID
+    profile_id: UUID
     seq: int
     page: int
     kind: SegmentKind
@@ -19,10 +19,10 @@ class Segment(BaseModel):
 
 
 class BriefItem(BaseModel):
-    """One thing the ingest LLM call found in the proposal.
+    """One thing the ingest LLM call found in the profile.
 
     `segment_ids` are the chunks it came from. They are required so the persona can only
-    challenge something the proposal really says (code checks the ids exist).
+    challenge something the profile really says (code checks the ids exist).
     """
 
     kind: Literal["claim", "assumption", "risk", "weak_point", "inconsistency"]
@@ -31,7 +31,7 @@ class BriefItem(BaseModel):
 
 
 class Brief(BaseModel):
-    """Structured summary of a proposal, stored on `proposal.brief`."""
+    """Structured summary of a profile, stored on `profile.brief`."""
 
     summary: str
     items: list[BriefItem]

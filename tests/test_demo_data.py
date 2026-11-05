@@ -7,7 +7,7 @@ from app.db import models as m
 from app.db.base import Base
 
 EXPECTED = {
-    "config_version": 3, "proposal": 1, "proposal_segment": 2, "session": 2, "turn": 6,
+    "config_version": 3, "profile": 1, "profile_segment": 2, "session": 2, "turn": 6,
 }
 
 
@@ -22,10 +22,10 @@ def test_running_it_twice_adds_nothing(db):
     assert demo_data.load_demo_data(db) == EXPECTED
 
 
-def test_the_persona_cites_a_real_proposal_chunk(db):
+def test_the_persona_cites_a_real_profile_chunk(db):
     demo_data.load_demo_data(db)
     citing = [t for t in db.scalars(select(m.Turn)) if t.refs]
-    segment_ids = {str(s) for s in db.scalars(select(m.ProposalSegment.id))}
+    segment_ids = {str(s) for s in db.scalars(select(m.ProfileSegment.id))}
     assert len(citing) == 1
     assert set(citing[0].refs) <= segment_ids
 

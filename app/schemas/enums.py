@@ -27,7 +27,7 @@ class FileType(StrEnum):
     TXT = "txt"
 
 
-class ProposalStatus(StrEnum):
+class ProfileStatus(StrEnum):
     QUEUED = "queued"
     EXTRACTING = "extracting"
     READY = "ready"

@@ -105,7 +105,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: x-dev-user
         in: header
         required: false
@@ -152,7 +152,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: key
         in: path
         required: true
@@ -259,7 +259,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: key
         in: path
         required: true
@@ -318,7 +318,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: key
         in: path
         required: true
@@ -452,14 +452,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/proposals:
+  /api/v1/profiles:
     post:
       tags:
-      - proposals
-      summary: Upload Proposal
-      description: Save the file, queue the ingest job, return 202. Poll GET /proposals/{id}
+      - profiles
+      summary: Upload Profile
+      description: Save the file, queue the ingest job, return 202. Poll GET /profiles/{id}
         until ready.
-      operationId: upload_proposal_api_v1_proposals_post
+      operationId: upload_profile_api_v1_profiles_post
       parameters:
       - name: x-dev-user
         in: header
@@ -482,14 +482,14 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_upload_proposal_api_v1_proposals_post'
+              $ref: '#/components/schemas/Body_upload_profile_api_v1_profiles_post'
       responses:
         '202':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProposalDetail'
+                $ref: '#/components/schemas/ProfileDetail'
         '422':
           description: Validation Error
           content:
@@ -498,9 +498,9 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - proposals
-      summary: List Proposals
-      operationId: list_proposals_api_v1_proposals_get
+      - profiles
+      summary: List Profiles
+      operationId: list_profiles_api_v1_profiles_get
       parameters:
       - name: owner_ref
         in: query
@@ -551,28 +551,28 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProposalOut'
-                title: Response List Proposals Api V1 Proposals Get
+                  $ref: '#/components/schemas/ProfileOut'
+                title: Response List Profiles Api V1 Profiles Get
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/proposals/{proposal_id}:
+  /api/v1/profiles/{profile_id}:
     get:
       tags:
-      - proposals
-      summary: Get Proposal
-      operationId: get_proposal_api_v1_proposals__proposal_id__get
+      - profiles
+      summary: Get Profile
+      operationId: get_profile_api_v1_profiles__profile_id__get
       parameters:
-      - name: proposal_id
+      - name: profile_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       - name: x-dev-user
         in: header
         required: false
@@ -595,7 +595,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProposalDetail'
+                $ref: '#/components/schemas/ProfileDetail'
         '422':
           description: Validation Error
           content:
@@ -604,17 +604,17 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-      - proposals
-      summary: Delete Proposal
-      operationId: delete_proposal_api_v1_proposals__proposal_id__delete
+      - profiles
+      summary: Delete Profile
+      operationId: delete_profile_api_v1_profiles__profile_id__delete
       parameters:
-      - name: proposal_id
+      - name: profile_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       - name: x-dev-user
         in: header
         required: false
@@ -640,22 +640,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/proposals/{proposal_id}/segments:
+  /api/v1/profiles/{profile_id}/segments:
     get:
       tags:
-      - proposals
+      - profiles
       summary: List Segments
       description: The numbered chunks, so the UI can show the text a persona question
         cites.
-      operationId: list_segments_api_v1_proposals__proposal_id__segments_get
+      operationId: list_segments_api_v1_profiles__profile_id__segments_get
       parameters:
-      - name: proposal_id
+      - name: profile_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       - name: x-dev-user
         in: header
         required: false
@@ -681,7 +681,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Segment'
-                title: Response List Segments Api V1 Proposals  Proposal Id  Segments
+                title: Response List Segments Api V1 Profiles  Profile Id  Segments
                   Get
         '422':
           description: Validation Error
@@ -1195,7 +1195,7 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
-    Body_upload_proposal_api_v1_proposals_post:
+    Body_upload_profile_api_v1_profiles_post:
       properties:
         file:
           type: string
@@ -1204,7 +1204,7 @@ components:
       type: object
       required:
       - file
-      title: Body_upload_proposal_api_v1_proposals_post
+      title: Body_upload_profile_api_v1_profiles_post
     Brief:
       properties:
         summary:
@@ -1220,7 +1220,7 @@ components:
       - summary
       - items
       title: Brief
-      description: Structured summary of a proposal, stored on `proposal.brief`.
+      description: Structured summary of a profile, stored on `profile.brief`.
     BriefItem:
       properties:
         kind:
@@ -1248,13 +1248,13 @@ components:
       - text
       - segment_ids
       title: BriefItem
-      description: 'One thing the ingest LLM call found in the proposal.
+      description: 'One thing the ingest LLM call found in the profile.
 
 
         `segment_ids` are the chunks it came from. They are required so the persona
         can only
 
-        challenge something the proposal really says (code checks the ids exist).'
+        challenge something the profile really says (code checks the ids exist).'
     ConfigKind:
       type: string
       enum:
@@ -1279,6 +1279,14 @@ components:
       required:
       - config
       title: DraftBody
+    EditableKind:
+      type: string
+      enum:
+      - persona
+      - demand
+      title: EditableKind
+      description: What an admin may create and edit by hand. Scenarios are only loaded
+        with the import.
     EndReason:
       type: string
       enum:
@@ -1362,14 +1370,14 @@ components:
         persona_key:
           type: string
           title: Persona Key
-        proposal_id:
+        profile_id:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       type: object
       required:
       - persona_key
-      - proposal_id
+      - profile_id
       title: NewSession
     NewTurn:
       properties:
@@ -1392,7 +1400,7 @@ components:
           title: Config
       type: object
       title: NewVersion
-    ProposalDetail:
+    ProfileDetail:
       properties:
         id:
           type: string
@@ -1404,7 +1412,7 @@ components:
         file_type:
           $ref: '#/components/schemas/FileType'
         status:
-          $ref: '#/components/schemas/ProposalStatus'
+          $ref: '#/components/schemas/ProfileStatus'
         error:
           anyOf:
           - type: string
@@ -1435,8 +1443,8 @@ components:
       - owner_ref
       - brief
       - segment_count
-      title: ProposalDetail
-    ProposalOut:
+      title: ProfileDetail
+    ProfileOut:
       properties:
         id:
           type: string
@@ -1448,7 +1456,7 @@ components:
         file_type:
           $ref: '#/components/schemas/FileType'
         status:
-          $ref: '#/components/schemas/ProposalStatus'
+          $ref: '#/components/schemas/ProfileStatus'
         error:
           anyOf:
           - type: string
@@ -1470,15 +1478,15 @@ components:
       - error
       - created_at
       - owner_ref
-      title: ProposalOut
-    ProposalStatus:
+      title: ProfileOut
+    ProfileStatus:
       type: string
       enum:
       - queued
       - extracting
       - ready
       - failed
-      title: ProposalStatus
+      title: ProfileStatus
     PublishedItem:
       properties:
         key:
@@ -1553,10 +1561,10 @@ components:
           type: string
           format: uuid
           title: Id
-        proposal_id:
+        profile_id:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
         seq:
           type: integer
           title: Seq
@@ -1578,13 +1586,13 @@ components:
       type: object
       required:
       - id
-      - proposal_id
+      - profile_id
       - seq
       - page
       - kind
       - text
       title: Segment
-      description: One citable chunk of the proposal (a `proposal_segment` row).
+      description: One citable chunk of the profile (a `profile_segment` row).
     SegmentKind:
       type: string
       enum:
@@ -1600,12 +1608,12 @@ components:
         trainee_ref:
           type: string
           title: Trainee Ref
-        proposal_id:
+        profile_id:
           anyOf:
           - type: string
             format: uuid
           - type: 'null'
-          title: Proposal Id
+          title: Profile Id
         persona:
           $ref: '#/components/schemas/VersionRef'
         demand:
@@ -1646,7 +1654,7 @@ components:
       required:
       - id
       - trainee_ref
-      - proposal_id
+      - profile_id
       - persona
       - demand
       - status
@@ -1667,12 +1675,12 @@ components:
         trainee_ref:
           type: string
           title: Trainee Ref
-        proposal_id:
+        profile_id:
           anyOf:
           - type: string
             format: uuid
           - type: 'null'
-          title: Proposal Id
+          title: Profile Id
         persona:
           $ref: '#/components/schemas/VersionRef'
         demand:
@@ -1708,7 +1716,7 @@ components:
       required:
       - id
       - trainee_ref
-      - proposal_id
+      - profile_id
       - persona
       - demand
       - status

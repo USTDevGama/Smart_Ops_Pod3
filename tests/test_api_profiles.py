@@ -16,12 +16,12 @@ PDF = b"%PDF-1.7\n%starts like a pdf"
 
 
 def _upload(api, headers=ANNA, name="p.txt", data=TXT):
-    return api.client.post("/api/v1/proposals", headers=headers, files={"file": (name, data)})
+    return api.client.post("/api/v1/profiles", headers=headers, files={"file": (name, data)})
 
 
-def _row(api, proposal_id: str) -> m.Proposal:
+def _row(api, profile_id: str) -> m.Profile:
     with api.factory() as db:
-        return db.get(m.Proposal, UUID(proposal_id))
+        return db.get(m.Profile, UUID(profile_id))
 
 
 def _ingest(api) -> None:
@@ -38,7 +38,7 @@ def test_upload_saves_the_file_and_queues_the_job(api):
     assert api.store.read(_row(api, body["id"]).blob_uri) == TXT
 
 
-def test_the_same_file_twice_gives_the_same_proposal(api):
+def test_the_same_file_twice_gives_the_same_profile(api):
     first = _upload(api).json()
     second = _upload(api)
     assert second.status_code == 200
@@ -74,63 +74,63 @@ def test_a_pdf_is_accepted(api):
     assert _upload(api, name="p.pdf", data=PDF).status_code == 202
 
 
-def test_people_only_see_their_own_proposals(api):
+def test_people_only_see_their_own_profiles(api):
     mine = _upload(api).json()["id"]
-    assert api.client.get(f"/api/v1/proposals/{mine}", headers=ANNA).status_code == 200
-    assert api.client.get(f"/api/v1/proposals/{mine}", headers=BEN).status_code == 404
-    assert api.client.get(f"/api/v1/proposals/{mine}", headers=ADMIN).status_code == 200
-    assert api.client.get("/api/v1/proposals", headers=BEN).json() == []
-    assert len(api.client.get("/api/v1/proposals", headers=ADMIN).json()) == 1
+    assert api.client.get(f"/api/v1/profiles/{mine}", headers=ANNA).status_code == 200
+    assert api.client.get(f"/api/v1/profiles/{mine}", headers=BEN).status_code == 404
+    assert api.client.get(f"/api/v1/profiles/{mine}", headers=ADMIN).status_code == 200
+    assert api.client.get("/api/v1/profiles", headers=BEN).json() == []
+    assert len(api.client.get("/api/v1/profiles", headers=ADMIN).json()) == 1
 
 
 def test_after_ingest_the_brief_and_chunks_are_readable(api):
-    proposal_id = _upload(api).json()["id"]
+    profile_id = _upload(api).json()["id"]
     _ingest(api)
-    detail = api.client.get(f"/api/v1/proposals/{proposal_id}", headers=ANNA).json()
+    detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
     assert detail["status"] == "ready"
     assert detail["segment_count"] == 4
-    segments = api.client.get(f"/api/v1/proposals/{proposal_id}/segments", headers=ANNA).json()
+    segments = api.client.get(f"/api/v1/profiles/{profile_id}/segments", headers=ANNA).json()
     assert [s["seq"] for s in segments] == [1, 2, 3, 4]
     cited = {sid for item in detail["brief"]["items"] for sid in item["segment_ids"]}
     assert cited <= {s["id"] for s in segments}  # every citation is a real chunk
 
 
 def test_the_placeholder_marks_unreadable_files_failed(api):
-    proposal_id = _upload(api, name="p.pdf", data=PDF).json()["id"]
+    profile_id = _upload(api, name="p.pdf", data=PDF).json()["id"]
     _ingest(api)
-    detail = api.client.get(f"/api/v1/proposals/{proposal_id}", headers=ANNA).json()
+    detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
     assert detail["status"] == "failed"
     assert "only reads .txt" in detail["error"]
 
 
 def test_delete_removes_the_file_and_chunks(api):
-    proposal_id = _upload(api).json()["id"]
+    profile_id = _upload(api).json()["id"]
     _ingest(api)
-    uri = _row(api, proposal_id).blob_uri
-    assert api.client.delete(f"/api/v1/proposals/{proposal_id}", headers=BEN).status_code == 404
-    assert api.client.delete(f"/api/v1/proposals/{proposal_id}", headers=ANNA).status_code == 204
+    uri = _row(api, profile_id).blob_uri
+    assert api.client.delete(f"/api/v1/profiles/{profile_id}", headers=BEN).status_code == 404
+    assert api.client.delete(f"/api/v1/profiles/{profile_id}", headers=ANNA).status_code == 204
     with api.factory() as db:
-        assert db.scalars(select(m.ProposalSegment)).all() == []
+        assert db.scalars(select(m.ProfileSegment)).all() == []
     with pytest.raises(FileNotFoundError):
         api.store.read(uri)
 
 
-def test_a_proposal_used_by_a_session_cannot_be_deleted(api):
+def test_a_profile_used_by_a_session_cannot_be_deleted(api):
     publish_sample_settings(api.client)
-    proposal_id = _upload(api).json()["id"]
+    profile_id = _upload(api).json()["id"]
     _ingest(api)
     started = api.client.post(
         "/api/v1/sessions",
         headers=ANNA,
-        json={"persona_key": "verma-strict", "proposal_id": proposal_id},
+        json={"persona_key": "verma-strict", "profile_id": profile_id},
     )
     assert started.status_code == 201
-    assert api.client.delete(f"/api/v1/proposals/{proposal_id}", headers=ANNA).status_code == 409
+    assert api.client.delete(f"/api/v1/profiles/{profile_id}", headers=ANNA).status_code == 409
 
 
-def test_the_sample_proposal_file_ingests(api):
-    data = (SAMPLES / "proposals" / "billing_migration.txt").read_bytes()
-    proposal_id = _upload(api, data=data, name="billing.txt").json()["id"]
+def test_the_sample_profile_file_ingests(api):
+    data = (SAMPLES / "profiles" / "sample_resume.txt").read_bytes()
+    profile_id = _upload(api, data=data, name="resume.txt").json()["id"]
     _ingest(api)
-    detail = api.client.get(f"/api/v1/proposals/{proposal_id}", headers=ANNA).json()
+    detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
     assert detail["status"] == "ready"

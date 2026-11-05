@@ -23,7 +23,7 @@ class TurnOutput(BaseModel):
 
     evaluation: Evaluation
     reply: str
-    refs: list[UUID] = Field(default_factory=list)  # proposal segment ids the reply relied on
+    refs: list[UUID] = Field(default_factory=list)  # profile segment ids the reply relied on
 
 
 class Turn(BaseModel):

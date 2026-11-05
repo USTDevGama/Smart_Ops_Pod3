@@ -26,7 +26,7 @@ from app.schemas.enums import (
     ConfigStatus,
     EndReason,
     FileType,
-    ProposalStatus,
+    ProfileStatus,
     SegmentKind,
     SessionStatus,
     TurnRole,
@@ -48,10 +48,10 @@ class ConfigVersion(Base):
     created_at: Mapped[datetime] = created_at_col()
 
 
-class Proposal(Base):
+class Profile(Base):
     """An uploaded file and what we learned from it."""
 
-    __tablename__ = "proposal"
+    __tablename__ = "profile"
 
     id: Mapped[uuid.UUID] = uuid_pk()
     owner_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
@@ -59,20 +59,20 @@ class Proposal(Base):
     file_type: Mapped[FileType] = mapped_column(enum_col(FileType, "file_type"))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     blob_uri: Mapped[str] = mapped_column(String(500))
-    status: Mapped[ProposalStatus] = mapped_column(enum_col(ProposalStatus, "proposal_status"))
+    status: Mapped[ProfileStatus] = mapped_column(enum_col(ProfileStatus, "profile_status"))
     brief: Mapped[dict | None] = mapped_column(JsonType)
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = created_at_col()  # also drives the 30-day purge
 
 
-class ProposalSegment(Base):
-    """The proposal split into citable chunks."""
+class ProfileSegment(Base):
+    """The profile split into citable chunks."""
 
-    __tablename__ = "proposal_segment"
-    __table_args__ = (UniqueConstraint("proposal_id", "seq"),)
+    __tablename__ = "profile_segment"
+    __table_args__ = (UniqueConstraint("profile_id", "seq"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    proposal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("proposal.id", ondelete="CASCADE"))
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profile.id", ondelete="CASCADE"))
     seq: Mapped[int] = mapped_column(Integer)
     page: Mapped[int] = mapped_column(Integer)  # 1 for plain text files
     kind: Mapped[SegmentKind] = mapped_column(enum_col(SegmentKind, "segment_kind"))
@@ -88,8 +88,8 @@ class RoleplaySession(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     trainee_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
     # The trainee's profile. The API requires it for new sessions; old rows may be empty. No
-    # cascade: the purge job must not delete a proposal still used by a live session.
-    proposal_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("proposal.id"))
+    # cascade: the purge job must not delete a profile still used by a live session.
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("profile.id"))
     persona_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("config_version.id"))
     # The project demand in force when the chat started (may be empty).
     demand_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("config_version.id"))
@@ -120,7 +120,7 @@ class Turn(Base):
     role: Mapped[TurnRole] = mapped_column(enum_col(TurnRole, "turn_role"))
     content: Mapped[str] = mapped_column(Text)
     escalation_level: Mapped[int | None] = mapped_column(Integer)  # persona rows only
-    refs: Mapped[list | None] = mapped_column(JsonType)  # persona rows: proposal_segment ids
+    refs: Mapped[list | None] = mapped_column(JsonType)  # persona rows: profile_segment ids
     evaluation: Mapped[dict | None] = mapped_column(JsonType)  # trainee rows only
     idempotency_key: Mapped[str | None] = mapped_column(String(100))  # trainee rows only
     created_at: Mapped[datetime] = created_at_col()

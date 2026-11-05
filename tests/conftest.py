@@ -13,7 +13,7 @@ from app.api.deps import get_db
 from app.db import models  # noqa: F401
 from app.db.base import Base
 from app.main import app
-from app.schemas.enums import FileType, ProposalStatus
+from app.schemas.enums import FileType, ProfileStatus
 from app.storage import LocalBlobStore, get_blob_store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,9 +68,9 @@ def api(tmp_path, monkeypatch):
 def ready_profile(api, owner_ref: str = "anna") -> str:
     """A trainee profile that is already ingested (a ready row, no file needed)."""
     with api.factory() as db:
-        row = models.Proposal(
+        row = models.Profile(
             owner_ref=owner_ref, filename="profile.txt", file_type=FileType.TXT,
-            sha256=uuid.uuid4().hex * 2, blob_uri="none", status=ProposalStatus.READY,
+            sha256=uuid.uuid4().hex * 2, blob_uri="none", status=ProfileStatus.READY,
         )
         db.add(row)
         db.commit()
