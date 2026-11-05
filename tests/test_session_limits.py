@@ -29,12 +29,10 @@ def test_grace_turns_only_count_while_answers_improve():
     assert allowed_turns(_persona(max_turns=6), [0.3, 0.9]) == 6
 
 
-def _ctx(level=1, open_checklist=None) -> SessionContext:
+def _ctx(level=1) -> SessionContext:
     raw = load_sample("scenarios/vendor_delay.json")["scenarios"][0]
-    scenario = ScenarioConfig.model_validate(raw)
     return SessionContext(
-        persona=_persona(), scenario=scenario, level=level,
-        open_checklist=open_checklist or scenario.good_answer_contains,
+        persona=_persona(), scenarios=[ScenarioConfig.model_validate(raw)], level=level
     )
 
 

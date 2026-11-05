@@ -62,6 +62,18 @@ class ScenarioConfig(BaseModel):
     good_answer_contains: list[str] = Field(min_length=1)  # the checklist for a good answer
 
 
+class DemandConfig(BaseModel):
+    """What the project needs, from the Gama team. The agent always knows it and compares it
+    with each trainee's profile."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    description: str
+    stack: list[str] = Field(default_factory=list)  # for example "Spring Boot", "React"
+    expectations: list[str] = Field(min_length=1)  # what the client expects of the person
+
+
 class EnvironmentSettings(BaseModel):
     """Per-environment defaults (the seed pack's config/stage|prod.settings.json)."""
 

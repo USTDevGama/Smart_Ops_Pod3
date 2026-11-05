@@ -74,15 +74,64 @@ def test_only_admins_edit_settings(api):
     assert api.client.post(BASE, headers=ANNA, json=body).status_code == 403
 
 
-def test_trainees_see_only_published_personas_and_scenarios(api):
+def test_trainees_see_only_published_personas(api):
     _create(api.client, key="draft-only")
     assert api.client.get("/api/v1/personas", headers=ANNA).json() == []
     publish_sample_settings(api.client)
     personas = api.client.get("/api/v1/personas", headers=ANNA).json()
-    scenarios = api.client.get("/api/v1/scenarios", headers=ANNA).json()
     assert [p["key"] for p in personas] == ["verma-strict"]
     assert personas[0]["title"] == "Ms. Verma"
-    assert scenarios[0]["title"] == "Vendor late with a component"
+    assert api.client.get("/api/v1/scenarios", headers=ANNA).status_code == 404  # no longer chosen
+
+
+DEMAND = load_sample("demand/project_demand.json")
+SCENARIOS = load_sample("scenarios/vendor_delay.json")
+IMPORT = "/api/v1/admin/scenarios/import"
+
+
+def test_the_demand_is_a_setting_with_its_own_shape(api):
+    base = "/api/v1/admin/config/demand"
+    created = api.client.post(base, headers=ADMIN, json={"key": "gama-project", "config": DEMAND})
+    assert created.status_code == 201
+    no_expectations = DEMAND | {"expectations": []}
+    refused = api.client.post(base, headers=ADMIN, json={"key": "x", "config": no_expectations})
+    assert refused.status_code == 422
+
+
+def test_scenarios_are_loaded_once_in_bulk(api):
+    first = api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
+    assert first.status_code == 200
+    assert first.json() == {"created": ["vd-01"], "updated": [], "unchanged": []}
+    listed = api.client.get("/api/v1/admin/config/scenario", headers=ADMIN).json()
+    assert [(k["key"], [v["status"] for v in k["versions"]]) for k in listed] == [
+        ("vd-01", ["published"])
+    ]
+
+
+def test_sending_the_same_scenario_file_again_changes_nothing(api):
+    api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
+    again = api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
+    assert again.json() == {"created": [], "updated": [], "unchanged": ["vd-01"]}
+
+
+def test_a_changed_scenario_becomes_the_next_version(api):
+    api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
+    changed = {"scenarios": [SCENARIOS["scenarios"][0] | {"title": "Vendor very late"}]}
+    result = api.client.post(IMPORT, headers=ADMIN, json=changed)
+    assert result.json()["updated"] == ["vd-01"]
+    versions = api.client.get("/api/v1/admin/config/scenario", headers=ADMIN).json()[0]["versions"]
+    assert [(v["version_no"], v["status"]) for v in versions] == [(1, "retired"), (2, "published")]
+
+
+def test_the_scenario_import_checks_its_input_and_who_sends_it(api):
+    assert api.client.post(IMPORT, headers=ANNA, json=SCENARIOS).status_code == 403
+    assert api.client.post(IMPORT, headers=ADMIN, json={"scenarios": []}).status_code == 422
+    broken = {"scenarios": [{"id": "X-1", "title": "no objections"}]}
+    assert api.client.post(IMPORT, headers=ADMIN, json=broken).status_code == 422
+    twice = {"scenarios": SCENARIOS["scenarios"] * 2}
+    assert api.client.post(IMPORT, headers=ADMIN, json=twice).status_code == 422
+    nothing_saved = api.client.get("/api/v1/admin/config/scenario", headers=ADMIN).json()
+    assert nothing_saved == []
 
 
 def test_errors_use_one_shape(api):

@@ -1,4 +1,5 @@
 import json
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +13,7 @@ from app.api.deps import get_db
 from app.db import models  # noqa: F401
 from app.db.base import Base
 from app.main import app
+from app.schemas.enums import FileType, ProposalStatus
 from app.storage import LocalBlobStore, get_blob_store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,14 +65,33 @@ def api(tmp_path, monkeypatch):
     app.dependency_overrides.clear()
 
 
-def publish_sample_settings(client, persona_overrides: dict | None = None) -> None:
-    """An admin publishes the made-up persona and scenario from samples/."""
+def ready_profile(api, owner_ref: str = "anna") -> str:
+    """A trainee profile that is already ingested (a ready row, no file needed)."""
+    with api.factory() as db:
+        row = models.Proposal(
+            owner_ref=owner_ref, filename="profile.txt", file_type=FileType.TXT,
+            sha256=uuid.uuid4().hex * 2, blob_uri="none", status=ProposalStatus.READY,
+        )
+        db.add(row)
+        db.commit()
+        return str(row.id)
+
+
+def publish_sample_settings(
+    client, persona_overrides: dict | None = None, demand: bool = True, scenarios: bool = True
+) -> None:
+    """An admin publishes the made-up persona and demand, and imports the made-up scenarios."""
     persona = load_sample("personas/ms_verma_strict.json") | (persona_overrides or {})
-    scenario = load_sample("scenarios/vendor_delay.json")["scenarios"][0]
-    for kind, key, config in (
-        ("persona", "verma-strict", persona),
-        ("scenario", "vendor-delay", scenario),
-    ):
+    if scenarios:
+        imported = client.post(
+            "/api/v1/admin/scenarios/import", headers=ADMIN,
+            json=load_sample("scenarios/vendor_delay.json"),
+        )
+        assert imported.status_code == 200, imported.text
+    items = [("persona", "verma-strict", persona)]
+    if demand:
+        items.append(("demand", "gama-project", load_sample("demand/project_demand.json")))
+    for kind, key, config in items:
         created = client.post(
             f"/api/v1/admin/config/{kind}", headers=ADMIN, json={"key": key, "config": config}
         )

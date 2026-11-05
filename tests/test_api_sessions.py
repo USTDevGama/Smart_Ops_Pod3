@@ -7,10 +7,9 @@ from app.agent.engine import get_engine
 from app.ingest import placeholder
 from app.main import app
 from app.schemas import Evaluation, TurnOutput
-from tests.conftest import ADMIN, ANNA, BEN, load_sample, publish_sample_settings
+from tests.conftest import ADMIN, ANNA, BEN, load_sample, publish_sample_settings, ready_profile
 
-START = {"persona_key": "verma-strict", "scenario_key": "vendor-delay"}
-CHECKLIST = load_sample("scenarios/vendor_delay.json")["scenarios"][0]["good_answer_contains"]
+START = {"persona_key": "verma-strict"}
 
 
 def output(quality=0.3, level=2, met=(), refs=(), reply="Be specific."):
@@ -55,7 +54,8 @@ def chat(api):
 
 
 def _start(api, headers=ANNA, **extra):
-    return api.client.post("/api/v1/sessions", headers=headers, json=START | extra)
+    body = START | {"proposal_id": ready_profile(api, headers["X-Dev-User"])} | extra
+    return api.client.post("/api/v1/sessions", headers=headers, json=body)
 
 
 def _send(api, session_id, text="We will fix it by 9 June", key=None, headers=ANNA):
@@ -86,6 +86,8 @@ def test_the_client_speaks_first(chat):
     body = started.json()
     assert body["status"] == "active"
     assert body["persona"] == {"key": "verma-strict", "version_no": 1}
+    assert body["demand"] == {"key": "gama-project", "version_no": 1}
+    assert "scenario" not in body  # the agent picks scenarios itself
     assert [(t["idx"], t["role"], t["escalation_level"]) for t in body["turns"]] == [
         (0, "persona", 1)
     ]
@@ -165,25 +167,25 @@ def test_the_session_ends_at_the_turn_limit(chat):
     assert _send(api, session_id).status_code == 409
 
 
-def test_the_session_ends_early_when_the_checklist_is_covered(chat):
+def test_a_covered_checklist_no_longer_ends_the_session(chat):
     api, use = chat
-    use([output(quality=0.9, level=1, met=CHECKLIST)])
+    use([output(quality=0.9, level=1, met=["says who pays", "gives a new date"])])
     _publish_persona(api, min_turns=1)
     session_id = _start(api).json()["id"]
     done = _events(_send(api, session_id))["done"]
-    assert done["ended"] is True
-    assert done["end_reason"] == "concerns_resolved"
+    assert done["ended"] is False  # only the turn limit (or someone ending it) closes a chat
 
 
-def test_the_engine_is_told_which_checklist_items_are_still_open(chat):
+def test_the_engine_is_given_the_demand_and_every_scenario(chat):
     api, use = chat
-    engine = use([output(met=CHECKLIST[:2]), output()])
+    engine = use([output(), output()])
     session_id = _start(api).json()["id"]
     _send(api, session_id)
     _send(api, session_id)
-    assert engine.contexts[0].open_checklist == CHECKLIST
-    assert engine.contexts[1].open_checklist == CHECKLIST[2:]
-    assert engine.contexts[1].turns_used == 1
+    ctx = engine.contexts[1]
+    assert ctx.demand.name == "Billing platform modernisation"
+    assert [s.id for s in ctx.scenarios] == ["VD-01"]
+    assert ctx.turns_used == 1
 
 
 def test_invented_citations_are_dropped_and_real_ones_kept(chat):
@@ -196,7 +198,7 @@ def test_invented_citations_are_dropped_and_real_ones_kept(chat):
     real = api.client.get(f"/api/v1/proposals/{proposal_id}/segments", headers=ANNA).json()[0]["id"]
     use([output(refs=[real, str(uuid4())])])
     session_id = _start(api, proposal_id=proposal_id).json()["id"]
-    assert _get(api, session_id).json()["turns"][0]["refs"] != [None]
+    assert _get(api, session_id).json()["turns"][0]["refs"] == []  # the opening cited nothing
     _send(api, session_id)
     persona_turn = _get(api, session_id).json()["turns"][-1]
     assert persona_turn["refs"] == [real]
@@ -212,8 +214,29 @@ def test_a_session_cannot_start_on_an_unready_or_foreign_proposal(chat):
     assert _start(api, headers=BEN, proposal_id=proposal_id).status_code == 404
 
 
-def test_starting_needs_published_settings(api):
+def test_starting_needs_a_published_persona(api):
     assert _start(api).status_code == 404
+
+
+def test_starting_needs_a_demand_and_scenarios(api):
+    publish_sample_settings(api.client, demand=False, scenarios=False)
+    assert _start(api).status_code == 409  # no demand yet
+    publish_sample_settings_demand = api.client.post(
+        "/api/v1/admin/config/demand", headers=ADMIN,
+        json={"key": "gama-project", "config": load_sample("demand/project_demand.json")},
+    )
+    assert publish_sample_settings_demand.status_code == 201
+    api.client.post("/api/v1/admin/config/demand/gama-project/versions/1/publish", headers=ADMIN)
+    refused = _start(api)
+    assert refused.status_code == 409
+    assert "scenarios" in refused.json()["detail"]
+
+
+def test_a_profile_is_required(chat):
+    api, use = chat
+    use([])
+    response = api.client.post("/api/v1/sessions", headers=ANNA, json=START)
+    assert response.status_code == 422
 
 
 def test_people_only_see_their_own_sessions(chat):

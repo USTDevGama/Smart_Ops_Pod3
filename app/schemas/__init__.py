@@ -12,6 +12,7 @@ from app.schemas.assessment import (
 )
 from app.schemas.config import (
     BandCutoffs,
+    DemandConfig,
     DimensionConfig,
     EnvironmentSettings,
     EscalationStep,
@@ -27,6 +28,7 @@ __all__ = [
     "BandCutoffs",
     "Brief",
     "BriefItem",
+    "DemandConfig",
     "DimensionConfig",
     "DimensionResult",
     "EnvironmentSettings",

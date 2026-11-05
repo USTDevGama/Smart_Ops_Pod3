@@ -1,7 +1,8 @@
 """The 5 tables. Only Dev D writes migrations for changes here.
 
 Scoring, review, reports, users, the AI-call log and the audit log are not built yet; their
-tables were dropped in migration 0002 and come back when those features are built.
+tables were removed (the first migration creates only these 5) and come back, through a new
+migration, when those features are built.
 """
 
 import uuid
@@ -80,17 +81,20 @@ class ProposalSegment(Base):
 
 
 class RoleplaySession(Base):
-    """One roleplay run. Pins the exact persona and scenario versions it used."""
+    """One roleplay run. Pins the exact persona and demand versions it used."""
 
     __tablename__ = "session"
 
     id: Mapped[uuid.UUID] = uuid_pk()
     trainee_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
-    # Optional: a session can run on the scenario alone. No cascade: the purge job must not
-    # delete a proposal still used by a live session.
+    # The trainee's profile. The API requires it for new sessions; old rows may be empty. No
+    # cascade: the purge job must not delete a proposal still used by a live session.
     proposal_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("proposal.id"))
     persona_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("config_version.id"))
-    scenario_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("config_version.id"))
+    # The project demand in force when the chat started (may be empty).
+    demand_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("config_version.id"))
+    # No longer set: the agent picks scenarios itself. Kept so old sessions still load.
+    scenario_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("config_version.id"))
     status: Mapped[SessionStatus] = mapped_column(enum_col(SessionStatus, "session_status"))
     end_reason: Mapped[EndReason | None] = mapped_column(enum_col(EndReason, "end_reason"))
     started_at: Mapped[datetime] = created_at_col()

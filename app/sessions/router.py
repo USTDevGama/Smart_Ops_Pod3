@@ -25,8 +25,7 @@ any_user = require_role(Role.TRAINEE, Role.ADMIN)
 
 class NewSession(BaseModel):
     persona_key: str
-    scenario_key: str
-    proposal_id: UUID | None = None
+    proposal_id: UUID  # the trainee's ready profile
 
 
 class NewTurn(BaseModel):
@@ -54,7 +53,7 @@ class SessionOut(BaseModel):
     trainee_ref: str
     proposal_id: UUID | None
     persona: VersionRef
-    scenario: VersionRef
+    demand: VersionRef | None
     status: SessionStatus
     end_reason: EndReason | None
     started_at: datetime
@@ -90,9 +89,11 @@ def _session_fields(loaded: Loaded) -> dict:
         "persona": VersionRef(
             key=loaded.persona_version.key, version_no=loaded.persona_version.version_no
         ),
-        "scenario": VersionRef(
-            key=loaded.scenario_version.key, version_no=loaded.scenario_version.version_no
-        ),
+        "demand": VersionRef(
+            key=loaded.demand_version.key, version_no=loaded.demand_version.version_no
+        )
+        if loaded.demand_version
+        else None,
         "status": s.status,
         "end_reason": s.end_reason,
         "started_at": s.started_at,
@@ -116,10 +117,8 @@ def create_session(
     db: Session = Depends(get_db),
     engine: TurnEngine = Depends(get_engine),
 ):
-    """Start a chat: pins the latest published persona and scenario, and the client speaks first."""
-    loaded = service.start_session(
-        db, engine, user, body.persona_key, body.scenario_key, body.proposal_id
-    )
+    """Start a chat on a ready profile: pins the persona and demand, and the client speaks first."""
+    loaded = service.start_session(db, engine, user, body.persona_key, body.proposal_id)
     return _detail(loaded, user)
 
 

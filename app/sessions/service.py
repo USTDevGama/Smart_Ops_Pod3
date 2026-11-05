@@ -10,10 +10,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.agent.engine import ContextTurn, SessionContext, TurnEngine
-from app.api.admin_config import latest_published
+from app.api.admin_config import current_demand, latest_published, published
 from app.api.deps import CurrentUser, can_see
 from app.db import models as m
-from app.schemas import Brief, Evaluation, PersonaConfig, ScenarioConfig, TurnOutput
+from app.schemas import (
+    Brief,
+    DemandConfig,
+    Evaluation,
+    PersonaConfig,
+    ScenarioConfig,
+    TurnOutput,
+)
 from app.schemas.enums import (
     ConfigKind,
     EndReason,
@@ -32,9 +39,19 @@ class Loaded:
     def __init__(self, db: Session, session: m.RoleplaySession):
         self.session = session
         self.persona_version = db.get(m.ConfigVersion, session.persona_version_id)
-        self.scenario_version = db.get(m.ConfigVersion, session.scenario_version_id)
+        self.demand_version = (
+            db.get(m.ConfigVersion, session.demand_version_id)
+            if session.demand_version_id
+            else None
+        )
         self.persona = PersonaConfig.model_validate(self.persona_version.config)
-        self.scenario = ScenarioConfig.model_validate(self.scenario_version.config)
+        self.demand = (
+            DemandConfig.model_validate(self.demand_version.config) if self.demand_version else None
+        )
+        # The scenario dataset is shared: whatever is published now.
+        self.scenarios = [
+            ScenarioConfig.model_validate(v.config) for v in published(db, ConfigKind.SCENARIO)
+        ]
         self.turns = list(
             db.scalars(select(m.Turn).where(m.Turn.session_id == session.id).order_by(m.Turn.idx))
         )
@@ -62,18 +79,11 @@ class Loaded:
         levels = [t.escalation_level for t in self.turns if t.escalation_level]
         return levels[-1] if levels else 1
 
-    @property
-    def open_checklist(self) -> list[str]:
-        met: set[str] = set()
-        for turn in self.trainee_turns:
-            if turn.evaluation:
-                met.update(turn.evaluation.get("checklist_met", []))
-        return [i for i in self.scenario.good_answer_contains if i not in met]
-
     def context(self) -> SessionContext:
         return SessionContext(
             persona=self.persona,
-            scenario=self.scenario,
+            demand=self.demand,
+            scenarios=self.scenarios,
             brief=self.brief,
             turns=[
                 ContextTurn(
@@ -85,7 +95,6 @@ class Loaded:
                 for t in self.turns
             ],
             level=self.level,
-            open_checklist=self.open_checklist,
             turns_used=len(self.trainee_turns),
         )
 
@@ -114,25 +123,27 @@ def start_session(
     engine: TurnEngine,
     user: CurrentUser,
     persona_key: str,
-    scenario_key: str,
-    proposal_id: UUID | None,
+    proposal_id: UUID,
 ) -> Loaded:
     persona = latest_published(db, ConfigKind.PERSONA, persona_key)
-    scenario = latest_published(db, ConfigKind.SCENARIO, scenario_key)
-    if persona is None or scenario is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no published persona or scenario")
-    if proposal_id is not None:
-        proposal = db.get(m.Proposal, proposal_id)
-        if proposal is None or not can_see(user, proposal.owner_ref):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "proposal not found")
-        if proposal.status != ProposalStatus.READY:
-            raise HTTPException(status.HTTP_409_CONFLICT, "the proposal is not ready yet")
+    if persona is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no published persona with that key")
+    demand = current_demand(db)
+    if demand is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "no project demand has been published")
+    if not published(db, ConfigKind.SCENARIO):
+        raise HTTPException(status.HTTP_409_CONFLICT, "no scenarios have been loaded")
+    proposal = db.get(m.Proposal, proposal_id)
+    if proposal is None or not can_see(user, proposal.owner_ref):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
+    if proposal.status != ProposalStatus.READY:
+        raise HTTPException(status.HTTP_409_CONFLICT, "the profile is not ready yet")
 
     session = m.RoleplaySession(
         trainee_ref=user.user_ref,
         proposal_id=proposal_id,
         persona_version_id=persona.id,
-        scenario_version_id=scenario.id,
+        demand_version_id=demand.id,
         status=SessionStatus.ACTIVE,
     )
     db.add(session)
@@ -198,11 +209,8 @@ def take_turn(
     qualities = [t.evaluation["answer_quality"] for t in loaded.trainee_turns if t.evaluation]
     qualities.append(out.evaluation.answer_quality)
     used = len(loaded.trainee_turns) + 1
-    still_open = [i for i in loaded.open_checklist if i not in out.evaluation.checklist_met]
-    if used >= allowed_turns(loaded.persona, qualities):
+    if used >= allowed_turns(loaded.persona, qualities):  # the only automatic end
         _mark_ended(session, EndReason.TURN_CAP)
-    elif not still_open and used >= loaded.persona.min_turns:
-        _mark_ended(session, EndReason.CONCERNS_RESOLVED)
     try:
         db.commit()
     except IntegrityError:  # two sends at the same moment: the database lets only one win
