@@ -12,7 +12,6 @@ class Role(StrEnum):
 class ConfigKind(StrEnum):
     PERSONA = "persona"
     SCENARIO = "scenario"
-    DEMAND = "demand"
 
 
 class ConfigStatus(StrEnum):
@@ -27,16 +26,11 @@ class FileType(StrEnum):
     TXT = "txt"
 
 
-class ProposalStatus(StrEnum):
+class IngestStatus(StrEnum):
     QUEUED = "queued"
     EXTRACTING = "extracting"
     READY = "ready"
     FAILED = "failed"
-
-
-class SegmentKind(StrEnum):
-    TEXT = "text"  # native text from the file
-    OCR = "ocr"  # read from an image by OCR
 
 
 class SessionStatus(StrEnum):

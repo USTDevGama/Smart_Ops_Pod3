@@ -23,7 +23,6 @@ class TurnOutput(BaseModel):
 
     evaluation: Evaluation
     reply: str
-    refs: list[UUID] = Field(default_factory=list)  # proposal segment ids the reply relied on
 
 
 class Turn(BaseModel):
@@ -39,6 +38,5 @@ class Turn(BaseModel):
     role: TurnRole
     content: str
     escalation_level: int | None = Field(default=None, ge=1, le=4)  # persona rows only
-    refs: list[UUID] = Field(default_factory=list)  # persona rows only
     evaluation: Evaluation | None = None  # trainee rows only
     created_at: datetime

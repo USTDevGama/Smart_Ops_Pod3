@@ -27,7 +27,6 @@ class PlaceholderEngine:
         return TurnOutput(
             evaluation=Evaluation(answer_quality=1.0, quote="-", proposed_level=1),
             reply=_objections(ctx)[0],
-            refs=self._refs(ctx),
         )
 
     def respond(self, ctx: SessionContext, answer: str) -> TurnOutput:
@@ -45,11 +44,4 @@ class PlaceholderEngine:
                 proposed_level=min(max(level, 1), 4),
             ),
             reply=reply,
-            refs=self._refs(ctx),
         )
-
-    @staticmethod
-    def _refs(ctx: SessionContext) -> list:
-        if ctx.brief is None or not ctx.brief.items:
-            return []
-        return [ctx.brief.items[0].segment_ids[0]]

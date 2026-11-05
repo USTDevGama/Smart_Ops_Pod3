@@ -84,18 +84,30 @@ def test_trainees_see_only_published_personas(api):
     assert api.client.get("/api/v1/scenarios", headers=ANNA).status_code == 404  # no longer chosen
 
 
-DEMAND = load_sample("demand/project_demand.json")
 SCENARIOS = load_sample("scenarios/vendor_delay.json")
 IMPORT = "/api/v1/admin/scenarios/import"
 
 
-def test_the_demand_is_a_setting_with_its_own_shape(api):
-    base = "/api/v1/admin/config/demand"
-    created = api.client.post(base, headers=ADMIN, json={"key": "gama-project", "config": DEMAND})
-    assert created.status_code == 201
-    no_expectations = DEMAND | {"expectations": []}
-    refused = api.client.post(base, headers=ADMIN, json={"key": "x", "config": no_expectations})
+def test_only_personas_and_scenarios_are_settings(api):
+    assert api.client.get("/api/v1/admin/config/demand", headers=ADMIN).status_code == 422
+    body = {"key": "x", "config": {"name": "n"}}
+    refused = api.client.post("/api/v1/admin/config/demand", headers=ADMIN, json=body)
     assert refused.status_code == 422
+
+
+def test_scenarios_cannot_be_created_or_edited_by_hand(api):
+    api.client.post(IMPORT, headers=ADMIN, json=SCENARIOS)
+    scenario = SCENARIOS["scenarios"][0]
+    base = "/api/v1/admin/config/scenario"
+    calls = [
+        api.client.post(base, headers=ADMIN, json={"key": "new", "config": scenario}),
+        api.client.post(f"{base}/vd-01/versions", headers=ADMIN, json={"config": scenario}),
+        api.client.put(f"{base}/vd-01/versions/1", headers=ADMIN, json={"config": scenario}),
+        api.client.post(f"{base}/vd-01/versions/1/publish", headers=ADMIN),
+    ]
+    assert [c.status_code for c in calls] == [422, 422, 422, 422]
+    assert api.client.get(base, headers=ADMIN).status_code == 200  # reading is still fine
+    assert api.client.get(f"{base}/vd-01/versions/1", headers=ADMIN).status_code == 200
 
 
 def test_scenarios_are_loaded_once_in_bulk(api):

@@ -30,6 +30,6 @@ def meta() -> dict:
         "name": AGENT_NAME,
         "version": __version__,
         "signal_schema_version": SIGNAL_SCHEMA_VERSION,
-        "capabilities": ["proposal-ingest", "persona-roleplay", "assessment"],
+        "capabilities": ["profile-ingest", "persona-roleplay", "assessment"],
         "fallback_mode": False,
     }

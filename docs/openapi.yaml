@@ -105,7 +105,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: x-dev-user
         in: header
         required: false
@@ -152,7 +152,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: key
         in: path
         required: true
@@ -259,7 +259,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: key
         in: path
         required: true
@@ -318,7 +318,7 @@ paths:
         in: path
         required: true
         schema:
-          $ref: '#/components/schemas/ConfigKind'
+          $ref: '#/components/schemas/EditableKind'
       - name: key
         in: path
         required: true
@@ -452,14 +452,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/proposals:
+  /api/v1/profiles:
     post:
       tags:
-      - proposals
-      summary: Upload Proposal
-      description: Save the file, queue the ingest job, return 202. Poll GET /proposals/{id}
+      - profiles
+      summary: Upload Profile
+      description: Save the file, queue the ingest job, return 202. Poll GET /profiles/{id}
         until ready.
-      operationId: upload_proposal_api_v1_proposals_post
+      operationId: upload_profile_api_v1_profiles_post
       parameters:
       - name: x-dev-user
         in: header
@@ -482,14 +482,14 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_upload_proposal_api_v1_proposals_post'
+              $ref: '#/components/schemas/Body_upload_profile_api_v1_profiles_post'
       responses:
         '202':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProposalDetail'
+                $ref: '#/components/schemas/ProfileDetail'
         '422':
           description: Validation Error
           content:
@@ -498,9 +498,9 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - proposals
-      summary: List Proposals
-      operationId: list_proposals_api_v1_proposals_get
+      - profiles
+      summary: List Profiles
+      operationId: list_profiles_api_v1_profiles_get
       parameters:
       - name: owner_ref
         in: query
@@ -551,28 +551,28 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProposalOut'
-                title: Response List Proposals Api V1 Proposals Get
+                  $ref: '#/components/schemas/ProfileOut'
+                title: Response List Profiles Api V1 Profiles Get
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/proposals/{proposal_id}:
+  /api/v1/profiles/{profile_id}:
     get:
       tags:
-      - proposals
-      summary: Get Proposal
-      operationId: get_proposal_api_v1_proposals__proposal_id__get
+      - profiles
+      summary: Get Profile
+      operationId: get_profile_api_v1_profiles__profile_id__get
       parameters:
-      - name: proposal_id
+      - name: profile_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       - name: x-dev-user
         in: header
         required: false
@@ -595,7 +595,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProposalDetail'
+                $ref: '#/components/schemas/ProfileDetail'
         '422':
           description: Validation Error
           content:
@@ -604,17 +604,17 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-      - proposals
-      summary: Delete Proposal
-      operationId: delete_proposal_api_v1_proposals__proposal_id__delete
+      - profiles
+      summary: Delete Profile
+      operationId: delete_profile_api_v1_profiles__profile_id__delete
       parameters:
-      - name: proposal_id
+      - name: profile_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       - name: x-dev-user
         in: header
         required: false
@@ -640,22 +640,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/proposals/{proposal_id}/segments:
+  /api/v1/admin/demand:
+    post:
+      tags:
+      - demand
+      summary: Upload Demand
+      description: Save the file, queue the ingest job, return 202. Poll GET /admin/demand/{id}.
+      operationId: upload_demand_api_v1_admin_demand_post
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_demand_api_v1_admin_demand_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - proposals
-      summary: List Segments
-      description: The numbered chunks, so the UI can show the text a persona question
-        cites.
-      operationId: list_segments_api_v1_proposals__proposal_id__segments_get
+      - demand
+      summary: List Demands
+      operationId: list_demands_api_v1_admin_demand_get
       parameters:
-      - name: proposal_id
-        in: path
-        required: true
+      - name: limit
+        in: query
+        required: false
         schema:
-          type: string
-          format: uuid
-          title: Proposal Id
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       - name: x-dev-user
         in: header
         required: false
@@ -680,9 +730,89 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Segment'
-                title: Response List Segments Api V1 Proposals  Proposal Id  Segments
-                  Get
+                  $ref: '#/components/schemas/DemandOut'
+                title: Response List Demands Api V1 Admin Demand Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/demand/{demand_id}:
+    get:
+      tags:
+      - demand
+      summary: Get Demand
+      operationId: get_demand_api_v1_admin_demand__demand_id__get
+      parameters:
+      - name: demand_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Demand Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - demand
+      summary: Delete Demand
+      operationId: delete_demand_api_v1_admin_demand__demand_id__delete
+      parameters:
+      - name: demand_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Demand Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '204':
+          description: Successful Response
         '422':
           description: Validation Error
           content:
@@ -1195,7 +1325,7 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
-    Body_upload_proposal_api_v1_proposals_post:
+    Body_upload_demand_api_v1_admin_demand_post:
       properties:
         file:
           type: string
@@ -1204,63 +1334,22 @@ components:
       type: object
       required:
       - file
-      title: Body_upload_proposal_api_v1_proposals_post
-    Brief:
+      title: Body_upload_demand_api_v1_admin_demand_post
+    Body_upload_profile_api_v1_profiles_post:
       properties:
-        summary:
+        file:
           type: string
-          title: Summary
-        items:
-          items:
-            $ref: '#/components/schemas/BriefItem'
-          type: array
-          title: Items
+          contentMediaType: application/octet-stream
+          title: File
       type: object
       required:
-      - summary
-      - items
-      title: Brief
-      description: Structured summary of a proposal, stored on `proposal.brief`.
-    BriefItem:
-      properties:
-        kind:
-          type: string
-          enum:
-          - claim
-          - assumption
-          - risk
-          - weak_point
-          - inconsistency
-          title: Kind
-        text:
-          type: string
-          title: Text
-        segment_ids:
-          items:
-            type: string
-            format: uuid
-          type: array
-          minItems: 1
-          title: Segment Ids
-      type: object
-      required:
-      - kind
-      - text
-      - segment_ids
-      title: BriefItem
-      description: 'One thing the ingest LLM call found in the proposal.
-
-
-        `segment_ids` are the chunks it came from. They are required so the persona
-        can only
-
-        challenge something the proposal really says (code checks the ids exist).'
+      - file
+      title: Body_upload_profile_api_v1_profiles_post
     ConfigKind:
       type: string
       enum:
       - persona
       - scenario
-      - demand
       title: ConfigKind
     ConfigStatus:
       type: string
@@ -1269,6 +1358,83 @@ components:
       - published
       - retired
       title: ConfigStatus
+    DemandDetail:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/IngestStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        uploaded_by:
+          type: string
+          title: Uploaded By
+        content:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Content
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - error
+      - created_at
+      - uploaded_by
+      - content
+      title: DemandDetail
+    DemandOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/IngestStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        uploaded_by:
+          type: string
+          title: Uploaded By
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - error
+      - created_at
+      - uploaded_by
+      title: DemandOut
     DraftBody:
       properties:
         config:
@@ -1279,6 +1445,13 @@ components:
       required:
       - config
       title: DraftBody
+    EditableKind:
+      type: string
+      enum:
+      - persona
+      title: EditableKind
+      description: What an admin may create and edit by hand. Scenarios are only loaded
+        with the import.
     EndReason:
       type: string
       enum:
@@ -1327,6 +1500,14 @@ components:
       - updated
       - unchanged
       title: ImportResult
+    IngestStatus:
+      type: string
+      enum:
+      - queued
+      - extracting
+      - ready
+      - failed
+      title: IngestStatus
     KeyOut:
       properties:
         key:
@@ -1362,14 +1543,14 @@ components:
         persona_key:
           type: string
           title: Persona Key
-        proposal_id:
+        profile_id:
           type: string
           format: uuid
-          title: Proposal Id
+          title: Profile Id
       type: object
       required:
       - persona_key
-      - proposal_id
+      - profile_id
       title: NewSession
     NewTurn:
       properties:
@@ -1392,7 +1573,7 @@ components:
           title: Config
       type: object
       title: NewVersion
-    ProposalDetail:
+    ProfileDetail:
       properties:
         id:
           type: string
@@ -1404,7 +1585,7 @@ components:
         file_type:
           $ref: '#/components/schemas/FileType'
         status:
-          $ref: '#/components/schemas/ProposalStatus'
+          $ref: '#/components/schemas/IngestStatus'
         error:
           anyOf:
           - type: string
@@ -1417,13 +1598,12 @@ components:
         owner_ref:
           type: string
           title: Owner Ref
-        brief:
+        content:
           anyOf:
-          - $ref: '#/components/schemas/Brief'
+          - additionalProperties: true
+            type: object
           - type: 'null'
-        segment_count:
-          type: integer
-          title: Segment Count
+          title: Content
       type: object
       required:
       - id
@@ -1433,10 +1613,9 @@ components:
       - error
       - created_at
       - owner_ref
-      - brief
-      - segment_count
-      title: ProposalDetail
-    ProposalOut:
+      - content
+      title: ProfileDetail
+    ProfileOut:
       properties:
         id:
           type: string
@@ -1448,7 +1627,7 @@ components:
         file_type:
           $ref: '#/components/schemas/FileType'
         status:
-          $ref: '#/components/schemas/ProposalStatus'
+          $ref: '#/components/schemas/IngestStatus'
         error:
           anyOf:
           - type: string
@@ -1470,15 +1649,7 @@ components:
       - error
       - created_at
       - owner_ref
-      title: ProposalOut
-    ProposalStatus:
-      type: string
-      enum:
-      - queued
-      - extracting
-      - ready
-      - failed
-      title: ProposalStatus
+      title: ProfileOut
     PublishedItem:
       properties:
         key:
@@ -1547,50 +1718,6 @@ components:
       - scenarios
       title: ScenarioImport
       description: 'The same shape as the seed file: {"scenarios": [...]}.'
-    Segment:
-      properties:
-        id:
-          type: string
-          format: uuid
-          title: Id
-        proposal_id:
-          type: string
-          format: uuid
-          title: Proposal Id
-        seq:
-          type: integer
-          title: Seq
-        page:
-          type: integer
-          title: Page
-        kind:
-          $ref: '#/components/schemas/SegmentKind'
-        text:
-          type: string
-          title: Text
-        ocr_confidence:
-          anyOf:
-          - type: number
-            maximum: 1.0
-            minimum: 0.0
-          - type: 'null'
-          title: Ocr Confidence
-      type: object
-      required:
-      - id
-      - proposal_id
-      - seq
-      - page
-      - kind
-      - text
-      title: Segment
-      description: One citable chunk of the proposal (a `proposal_segment` row).
-    SegmentKind:
-      type: string
-      enum:
-      - text
-      - ocr
-      title: SegmentKind
     SessionDetail:
       properties:
         id:
@@ -1600,18 +1727,20 @@ components:
         trainee_ref:
           type: string
           title: Trainee Ref
-        proposal_id:
+        profile_id:
           anyOf:
           - type: string
             format: uuid
           - type: 'null'
-          title: Proposal Id
+          title: Profile Id
         persona:
           $ref: '#/components/schemas/VersionRef'
-        demand:
+        demand_id:
           anyOf:
-          - $ref: '#/components/schemas/VersionRef'
+          - type: string
+            format: uuid
           - type: 'null'
+          title: Demand Id
         status:
           $ref: '#/components/schemas/SessionStatus'
         end_reason:
@@ -1646,9 +1775,9 @@ components:
       required:
       - id
       - trainee_ref
-      - proposal_id
+      - profile_id
       - persona
-      - demand
+      - demand_id
       - status
       - end_reason
       - started_at
@@ -1667,18 +1796,20 @@ components:
         trainee_ref:
           type: string
           title: Trainee Ref
-        proposal_id:
+        profile_id:
           anyOf:
           - type: string
             format: uuid
           - type: 'null'
-          title: Proposal Id
+          title: Profile Id
         persona:
           $ref: '#/components/schemas/VersionRef'
-        demand:
+        demand_id:
           anyOf:
-          - $ref: '#/components/schemas/VersionRef'
+          - type: string
+            format: uuid
           - type: 'null'
+          title: Demand Id
         status:
           $ref: '#/components/schemas/SessionStatus'
         end_reason:
@@ -1708,9 +1839,9 @@ components:
       required:
       - id
       - trainee_ref
-      - proposal_id
+      - profile_id
       - persona
-      - demand
+      - demand_id
       - status
       - end_reason
       - started_at
@@ -1744,12 +1875,6 @@ components:
           - type: integer
           - type: 'null'
           title: Escalation Level
-        refs:
-          items:
-            type: string
-            format: uuid
-          type: array
-          title: Refs
         created_at:
           type: string
           format: date-time
@@ -1767,7 +1892,6 @@ components:
       - role
       - content
       - escalation_level
-      - refs
       - created_at
       title: TurnOut
     TurnRole:

@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,7 +14,7 @@ from app.api.deps import get_db
 from app.db import models  # noqa: F401
 from app.db.base import Base
 from app.main import app
-from app.schemas.enums import FileType, ProposalStatus
+from app.schemas.enums import FileType, IngestStatus
 from app.storage import LocalBlobStore, get_blob_store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,19 +59,39 @@ def api(tmp_path, monkeypatch):
 
     store = LocalBlobStore(tmp_path / "blobs")
     queued: list = []
-    monkeypatch.setattr("app.ingest.router.enqueue_ingest", queued.append)
+    queued_demand: list = []
+    monkeypatch.setattr("app.ingest.router.enqueue_profile_ingest", queued.append)
+    monkeypatch.setattr("app.ingest.demand_router.enqueue_demand_ingest", queued_demand.append)
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_blob_store] = lambda: store
-    yield SimpleNamespace(client=TestClient(app), factory=factory, store=store, queued=queued)
+    yield SimpleNamespace(
+        client=TestClient(app), factory=factory, store=store, queued=queued,
+        queued_demand=queued_demand,
+    )
     app.dependency_overrides.clear()
 
 
 def ready_profile(api, owner_ref: str = "anna") -> str:
     """A trainee profile that is already ingested (a ready row, no file needed)."""
     with api.factory() as db:
-        row = models.Proposal(
+        row = models.Profile(
             owner_ref=owner_ref, filename="profile.txt", file_type=FileType.TXT,
-            sha256=uuid.uuid4().hex * 2, blob_uri="none", status=ProposalStatus.READY,
+            sha256=uuid.uuid4().hex * 2, blob_uri="none", status=IngestStatus.READY,
+            content={"text": "Backend engineer. Led a billing rewrite; one service shipped late."},
+        )
+        db.add(row)
+        db.commit()
+        return str(row.id)
+
+
+def ready_demand(api, minutes_ago: int = 0) -> str:
+    """An admin-uploaded demand document that is already ingested."""
+    with api.factory() as db:
+        row = models.DemandDocument(
+            uploaded_by="admin1", filename="demand.txt", file_type=FileType.TXT,
+            sha256=uuid.uuid4().hex * 2, blob_uri="none", status=IngestStatus.READY,
+            content={"text": "Billing modernisation. The invoicing release is due in ten days."},
+            created_at=datetime.now(UTC) - timedelta(minutes=minutes_ago),
         )
         db.add(row)
         db.commit()
@@ -78,9 +99,9 @@ def ready_profile(api, owner_ref: str = "anna") -> str:
 
 
 def publish_sample_settings(
-    client, persona_overrides: dict | None = None, demand: bool = True, scenarios: bool = True
+    client, persona_overrides: dict | None = None, scenarios: bool = True
 ) -> None:
-    """An admin publishes the made-up persona and demand, and imports the made-up scenarios."""
+    """An admin publishes the made-up persona and imports the made-up scenarios."""
     persona = load_sample("personas/ms_verma_strict.json") | (persona_overrides or {})
     if scenarios:
         imported = client.post(
@@ -88,15 +109,12 @@ def publish_sample_settings(
             json=load_sample("scenarios/vendor_delay.json"),
         )
         assert imported.status_code == 200, imported.text
-    items = [("persona", "verma-strict", persona)]
-    if demand:
-        items.append(("demand", "gama-project", load_sample("demand/project_demand.json")))
-    for kind, key, config in items:
-        created = client.post(
-            f"/api/v1/admin/config/{kind}", headers=ADMIN, json={"key": key, "config": config}
-        )
-        assert created.status_code == 201, created.text
-        published = client.post(
-            f"/api/v1/admin/config/{kind}/{key}/versions/1/publish", headers=ADMIN
-        )
-        assert published.status_code == 200, published.text
+    created = client.post(
+        "/api/v1/admin/config/persona", headers=ADMIN,
+        json={"key": "verma-strict", "config": persona},
+    )
+    assert created.status_code == 201, created.text
+    published = client.post(
+        "/api/v1/admin/config/persona/verma-strict/versions/1/publish", headers=ADMIN
+    )
+    assert published.status_code == 200, published.text

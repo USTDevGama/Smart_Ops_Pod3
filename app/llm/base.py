@@ -20,7 +20,7 @@ class Message(BaseModel):
 
 
 class LLMRequest(BaseModel):
-    purpose: str  # brief | opening | turn | score
+    purpose: str  # ingest | opening | turn | score
     system: str
     messages: list[Message] = Field(default_factory=list)
     response_schema: type[BaseModel] | None = None  # parse and validate the reply as JSON
