@@ -19,12 +19,12 @@ def ingest_proposal(proposal_id: str) -> None:
 
 
 @celery_app.task(name="run_assessment")
-def run_assessment(assessment_id: str) -> None:
-    raise NotImplementedError("Dev C: scoring graph, quote check, blend, confidence")
+def run_assessment(session_id: str) -> None:
+    raise NotImplementedError("Dev C: validate criterion scores, apply weights, compute confidence")
 
 
 @celery_app.task(name="render_report")
-def render_report(assessment_id: str) -> None:
+def render_report(session_id: str) -> None:
     raise NotImplementedError("Dev A: HTML to PDF report with citations")
 
 

@@ -1,77 +1,122 @@
-from datetime import datetime
+"""Raw scoring-model output and code-validated assessment shapes."""
+
 from typing import Literal
-from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
-
-from app.schemas.enums import AssessmentStatus, Confidence, Polarity
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class Finding(BaseModel):
-    """One cited quote. `turn_id` + `quote` are checked by code (BR-12)."""
+class ScoringEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    turn_id: UUID
-    quote: str
-    polarity: Polarity
+    turn: int = Field(ge=1)
+    polarity: Literal["positive", "negative"]
 
 
-class LLMDimensionScore(BaseModel):
-    key: str
-    score: float = Field(ge=0, le=100)
-    rationale: str
-    findings: list[Finding] = Field(default_factory=list)
+class ScoringCriterion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    points: float = Field(ge=0, le=1)
+    reason: str = Field(min_length=1)
+    evidence: list[ScoringEvidence] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _unique_evidence_turns(self) -> "ScoringCriterion":
+        turns = [item.turn for item in self.evidence]
+        if len(turns) != len(set(turns)):
+            raise ValueError("evidence turns must be unique within a criterion")
+        return self
+
+
+class ScoringNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1)
+    evidence_turns: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _valid_turns(self) -> "ScoringNote":
+        if any(turn < 1 for turn in self.evidence_turns):
+            raise ValueError("evidence_turns must be positive exchange numbers")
+        if len(self.evidence_turns) != len(set(self.evidence_turns)):
+            raise ValueError("evidence_turns must be unique")
+        return self
 
 
 class ScoringOutput(BaseModel):
-    """What the scoring LLM call must return."""
+    """The scoring LLM response, matching samples/results/llm_output.json."""
 
-    dimensions: list[LLMDimensionScore]
+    model_config = ConfigDict(extra="forbid")
+
+    criteria: list[ScoringCriterion] = Field(min_length=1)
+    strengths: list[ScoringNote] = Field(default_factory=list)
+    gaps: list[ScoringNote] = Field(default_factory=list)
+    unanswered_objections: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _unique_criteria(self) -> "ScoringOutput":
+        keys = [criterion.id for criterion in self.criteria]
+        if len(keys) != len(set(keys)):
+            raise ValueError("criterion ids must be unique")
+        return self
 
 
-class DimensionResult(BaseModel):
-    """One dimension after the code checks and the blend."""
+class CriterionAssessment(BaseModel):
+    """One criterion after weights, status, evidence, and confidence are validated."""
 
-    key: str
-    weight: float
-    code_score: float | None = None
-    llm_score: float | None = None
-    score: float | None = None  # blended; None if the dimension lost all its evidence
-    rationale: str = ""
-    evidence: list[Finding] = Field(default_factory=list)  # only findings that passed the check
+    id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    weight: float = Field(ge=0, le=1)
+    status: Literal["not_met", "partly", "met"]
+    points: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=100)
+    reason: str = Field(min_length=1)
+    evidence: list[ScoringEvidence] = Field(default_factory=list)
 
 
 class Assessment(BaseModel):
-    """The suggested score for a session (an `assessment` row). Our richer, internal view."""
+    """Validated, report-ready score; it is derived from a session, not a DB row."""
 
-    id: UUID
-    session_id: UUID
-    run_no: int
-    status: AssessmentStatus
-    composite: float | None = None
-    band: str | None = None
-    confidence: Confidence | None = None
-    dimensions: list[DimensionResult] = Field(default_factory=list)
-    flags: list[str] = Field(default_factory=list)  # e.g. unresolved_at_limit, ended_early
-    created_at: datetime
+    rubric_version: str = Field(min_length=1)
+    criteria: list[CriterionAssessment] = Field(min_length=1)
+    handled: Literal["yes", "partly", "no"]
+    confidence_score: float = Field(ge=0, le=100)
+    strengths: list[ScoringNote] = Field(default_factory=list)
+    gaps: list[ScoringNote] = Field(default_factory=list)
+    unanswered_objections: list[str] = Field(default_factory=list)
+    human_review_required: bool = True
+
+    @model_validator(mode="after")
+    def _consistent_rubric(self) -> "Assessment":
+        keys = [criterion.id for criterion in self.criteria]
+        if len(keys) != len(set(keys)):
+            raise ValueError("criterion ids must be unique")
+
+        total_weight = sum(criterion.weight for criterion in self.criteria)
+        if abs(total_weight - 1.0) > 1e-6:
+            raise ValueError(f"criterion weights must sum to 1 (got {total_weight})")
+        return self
+
+    @property
+    def overall_score(self) -> float:
+        return 100 * sum(item.points * item.weight for item in self.criteria)
 
 
 # --- The program's result format ("roleplay-result"), what leaves the pod --------------------
-# Shape taken from the seed pack's contract. Two points are ASSUMPTIONS to confirm with the TPM:
-# the allowed values of `handled` (the seed only shows "partly"), and the 1-4 step range.
 
 
 class ResultTurn(BaseModel):
-    turn: int = Field(ge=1)  # 1-based position of the message; client and trainee both count
+    turn: int = Field(ge=1)  # 1-based position of a message; client and trainee count separately
     role: Literal["client", "trainee"]
     text: str
 
 
 class ResultBody(BaseModel):
-    pushback_peak_step: int = Field(ge=1, le=4)  # toughest escalation step the client reached
-    handled: Literal["yes", "partly", "no"]  # ASSUMPTION: confirm the allowed values
+    pushback_peak_step: int = Field(ge=1, le=4)
+    handled: Literal["yes", "partly", "no"]
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str]
-    evidence_turns: list[int]  # turn numbers that back the strengths and gaps
+    evidence_turns: list[int]
 
 
 class RoleplayResult(BaseModel):
@@ -85,8 +130,8 @@ class RoleplayResult(BaseModel):
 
     @model_validator(mode="after")
     def _evidence_points_at_real_turns(self) -> "RoleplayResult":
-        existing = {t.turn for t in self.turns}
-        missing = [n for n in self.result.evidence_turns if n not in existing]
+        existing = {turn.turn for turn in self.turns}
+        missing = [number for number in self.result.evidence_turns if number not in existing]
         if missing:
             raise ValueError(f"evidence_turns refer to turns that do not exist: {missing}")
         return self

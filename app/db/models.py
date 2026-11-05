@@ -1,7 +1,7 @@
 """The 5 tables. Only Dev D writes migrations for changes here.
 
-Scoring, review, reports, users, the AI-call log and the audit log are not built yet; their
-tables were dropped in migration 0002 and come back when those features are built.
+Scoring, review, reports, users, the AI-call log and the audit log are not stored in dedicated
+tables. Scoring and reports use the session, pinned configuration, and turns as inputs.
 """
 
 import uuid
