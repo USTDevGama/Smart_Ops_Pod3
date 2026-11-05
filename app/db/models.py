@@ -11,7 +11,6 @@ from datetime import datetime
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     String,
@@ -26,8 +25,7 @@ from app.schemas.enums import (
     ConfigStatus,
     EndReason,
     FileType,
-    ProfileStatus,
-    SegmentKind,
+    IngestStatus,
     SessionStatus,
     TurnRole,
 )
@@ -49,7 +47,7 @@ class ConfigVersion(Base):
 
 
 class Profile(Base):
-    """An uploaded file and what we learned from it."""
+    """A trainee's uploaded resume. Whatever the pipeline extracts is kept as JSON."""
 
     __tablename__ = "profile"
 
@@ -59,29 +57,34 @@ class Profile(Base):
     file_type: Mapped[FileType] = mapped_column(enum_col(FileType, "file_type"))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     blob_uri: Mapped[str] = mapped_column(String(500))
-    status: Mapped[ProfileStatus] = mapped_column(enum_col(ProfileStatus, "profile_status"))
-    brief: Mapped[dict | None] = mapped_column(JsonType)
+    status: Mapped[IngestStatus] = mapped_column(enum_col(IngestStatus, "ingest_status"))
+    content: Mapped[dict | None] = mapped_column(JsonType)  # what the pipeline extracted
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = created_at_col()  # also drives the 30-day purge
 
 
-class ProfileSegment(Base):
-    """The profile split into citable chunks."""
+class DemandDocument(Base):
+    """The project demand document, uploaded by an admin (master data from the Gama team).
 
-    __tablename__ = "profile_segment"
-    __table_args__ = (UniqueConstraint("profile_id", "seq"),)
+    It is short, so everything the pipeline extracts goes to the agent as it is; no chunking.
+    """
+
+    __tablename__ = "demand_document"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profile.id", ondelete="CASCADE"))
-    seq: Mapped[int] = mapped_column(Integer)
-    page: Mapped[int] = mapped_column(Integer)  # 1 for plain text files
-    kind: Mapped[SegmentKind] = mapped_column(enum_col(SegmentKind, "segment_kind"))
-    text: Mapped[str] = mapped_column(Text)
-    ocr_confidence: Mapped[float | None] = mapped_column(Float)
+    uploaded_by: Mapped[str] = mapped_column(String(64))  # the admin (X-Dev-User)
+    filename: Mapped[str] = mapped_column(String(255))
+    file_type: Mapped[FileType] = mapped_column(enum_col(FileType, "file_type"))
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    blob_uri: Mapped[str] = mapped_column(String(500))
+    status: Mapped[IngestStatus] = mapped_column(enum_col(IngestStatus, "ingest_status"))
+    content: Mapped[dict | None] = mapped_column(JsonType)  # what the pipeline extracted
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = created_at_col()
 
 
 class RoleplaySession(Base):
-    """One roleplay run. Pins the exact persona and demand versions it used."""
+    """One roleplay run. Pins the persona version and the demand document it used."""
 
     __tablename__ = "session"
 
@@ -91,8 +94,8 @@ class RoleplaySession(Base):
     # cascade: the purge job must not delete a profile still used by a live session.
     profile_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("profile.id"))
     persona_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("config_version.id"))
-    # The project demand in force when the chat started (may be empty).
-    demand_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("config_version.id"))
+    # The demand document in force when the chat started. No cascade, like the profile.
+    demand_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("demand_document.id"))
     # No longer set: the agent picks scenarios itself. Kept so old sessions still load.
     scenario_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("config_version.id"))
     status: Mapped[SessionStatus] = mapped_column(enum_col(SessionStatus, "session_status"))
@@ -102,7 +105,7 @@ class RoleplaySession(Base):
 
 
 class Turn(Base):
-    """The chat, one row per message. Never edited: the source of truth and the citation target."""
+    """The chat, one row per message. Never edited: the source of truth."""
 
     __tablename__ = "turn"
     __table_args__ = (
@@ -120,7 +123,6 @@ class Turn(Base):
     role: Mapped[TurnRole] = mapped_column(enum_col(TurnRole, "turn_role"))
     content: Mapped[str] = mapped_column(Text)
     escalation_level: Mapped[int | None] = mapped_column(Integer)  # persona rows only
-    refs: Mapped[list | None] = mapped_column(JsonType)  # persona rows: profile_segment ids
     evaluation: Mapped[dict | None] = mapped_column(JsonType)  # trainee rows only
     idempotency_key: Mapped[str | None] = mapped_column(String(100))  # trainee rows only
     created_at: Mapped[datetime] = created_at_col()

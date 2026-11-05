@@ -12,7 +12,6 @@ from app.schemas.assessment import (
 )
 from app.schemas.config import (
     BandCutoffs,
-    DemandConfig,
     DimensionConfig,
     EnvironmentSettings,
     EscalationStep,
@@ -21,14 +20,10 @@ from app.schemas.config import (
     ScoringConfig,
 )
 from app.schemas.conversation import Evaluation, Turn, TurnOutput
-from app.schemas.profile import Brief, BriefItem, Segment
 
 __all__ = [
     "Assessment",
     "BandCutoffs",
-    "Brief",
-    "BriefItem",
-    "DemandConfig",
     "DimensionConfig",
     "DimensionResult",
     "EnvironmentSettings",
@@ -43,7 +38,6 @@ __all__ = [
     "ScenarioConfig",
     "ScoringConfig",
     "ScoringOutput",
-    "Segment",
     "Turn",
     "TurnOutput",
 ]

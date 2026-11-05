@@ -11,6 +11,7 @@ celery_app.conf.update(
     task_default_queue="ingest",
     task_routes={
         "ingest_profile": {"queue": "ingest"},
+        "ingest_demand": {"queue": "ingest"},
         "sweep_stuck_jobs": {"queue": "ingest"},
         "run_assessment": {"queue": "assess"},
         "render_report": {"queue": "report"},

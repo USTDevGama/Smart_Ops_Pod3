@@ -4,21 +4,27 @@ from uuid import uuid4
 import pytest
 
 from app.agent.engine import get_engine
-from app.ingest import placeholder
 from app.main import app
 from app.schemas import Evaluation, TurnOutput
-from tests.conftest import ADMIN, ANNA, BEN, load_sample, publish_sample_settings, ready_profile
+from tests.conftest import (
+    ADMIN,
+    ANNA,
+    BEN,
+    load_sample,
+    publish_sample_settings,
+    ready_demand,
+    ready_profile,
+)
 
 START = {"persona_key": "verma-strict"}
 
 
-def output(quality=0.3, level=2, met=(), refs=(), reply="Be specific."):
+def output(quality=0.3, level=2, met=(), reply="Be specific."):
     return TurnOutput(
         evaluation=Evaluation(
             answer_quality=quality, checklist_met=list(met), quote="x", proposed_level=level
         ),
         reply=reply,
-        refs=list(refs),
     )
 
 
@@ -43,6 +49,7 @@ class ScriptedEngine:
 @pytest.fixture
 def chat(api):
     publish_sample_settings(api.client)
+    ready_demand(api)
 
     def use(outputs):
         engine = ScriptedEngine(outputs)
@@ -86,7 +93,7 @@ def test_the_client_speaks_first(chat):
     body = started.json()
     assert body["status"] == "active"
     assert body["persona"] == {"key": "verma-strict", "version_no": 1}
-    assert body["demand"] == {"key": "gama-project", "version_no": 1}
+    assert body["demand_id"] is not None
     assert "scenario" not in body  # the agent picks scenarios itself
     assert [(t["idx"], t["role"], t["escalation_level"]) for t in body["turns"]] == [
         (0, "persona", 1)
@@ -183,25 +190,10 @@ def test_the_engine_is_given_the_demand_and_every_scenario(chat):
     _send(api, session_id)
     _send(api, session_id)
     ctx = engine.contexts[1]
-    assert ctx.demand.name == "Billing platform modernisation"
+    assert "ten days" in ctx.demand["text"]
+    assert "billing rewrite" in ctx.profile["text"]
     assert [s.id for s in ctx.scenarios] == ["VD-01"]
     assert ctx.turns_used == 1
-
-
-def test_invented_citations_are_dropped_and_real_ones_kept(chat):
-    api, use = chat
-    upload = api.client.post("/api/v1/profiles", headers=ANNA,
-                             files={"file": ("p.txt", b"Budget\n\nVendor risk")})
-    profile_id = upload.json()["id"]
-    with api.factory() as db:
-        placeholder.ingest(db, api.queued[-1], api.store)
-    real = api.client.get(f"/api/v1/profiles/{profile_id}/segments", headers=ANNA).json()[0]["id"]
-    use([output(refs=[real, str(uuid4())])])
-    session_id = _start(api, profile_id=profile_id).json()["id"]
-    assert _get(api, session_id).json()["turns"][0]["refs"] == []  # the opening cited nothing
-    _send(api, session_id)
-    persona_turn = _get(api, session_id).json()["turns"][-1]
-    assert persona_turn["refs"] == [real]
 
 
 def test_a_session_cannot_start_on_an_unready_or_foreign_profile(chat):
@@ -219,14 +211,11 @@ def test_starting_needs_a_published_persona(api):
 
 
 def test_starting_needs_a_demand_and_scenarios(api):
-    publish_sample_settings(api.client, demand=False, scenarios=False)
-    assert _start(api).status_code == 409  # no demand yet
-    publish_sample_settings_demand = api.client.post(
-        "/api/v1/admin/config/demand", headers=ADMIN,
-        json={"key": "gama-project", "config": load_sample("demand/project_demand.json")},
-    )
-    assert publish_sample_settings_demand.status_code == 201
-    api.client.post("/api/v1/admin/config/demand/gama-project/versions/1/publish", headers=ADMIN)
+    publish_sample_settings(api.client, scenarios=False)
+    refused = _start(api)
+    assert refused.status_code == 409
+    assert "demand" in refused.json()["detail"]
+    ready_demand(api)
     refused = _start(api)
     assert refused.status_code == 409
     assert "scenarios" in refused.json()["detail"]

@@ -23,6 +23,7 @@ def test_worker_defaults_are_safe():
 def test_jobs_are_routed_to_their_queues():
     routes = celery_app.conf.task_routes
     assert routes["ingest_profile"]["queue"] == "ingest"
+    assert routes["ingest_demand"]["queue"] == "ingest"
     assert routes["run_assessment"]["queue"] == "assess"
     assert routes["render_report"]["queue"] == "report"
     for name in routes:

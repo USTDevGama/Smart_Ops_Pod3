@@ -84,17 +84,14 @@ def test_trainees_see_only_published_personas(api):
     assert api.client.get("/api/v1/scenarios", headers=ANNA).status_code == 404  # no longer chosen
 
 
-DEMAND = load_sample("demand/project_demand.json")
 SCENARIOS = load_sample("scenarios/vendor_delay.json")
 IMPORT = "/api/v1/admin/scenarios/import"
 
 
-def test_the_demand_is_a_setting_with_its_own_shape(api):
-    base = "/api/v1/admin/config/demand"
-    created = api.client.post(base, headers=ADMIN, json={"key": "gama-project", "config": DEMAND})
-    assert created.status_code == 201
-    no_expectations = DEMAND | {"expectations": []}
-    refused = api.client.post(base, headers=ADMIN, json={"key": "x", "config": no_expectations})
+def test_only_personas_and_scenarios_are_settings(api):
+    assert api.client.get("/api/v1/admin/config/demand", headers=ADMIN).status_code == 422
+    body = {"key": "x", "config": {"name": "n"}}
+    refused = api.client.post("/api/v1/admin/config/demand", headers=ADMIN, json=body)
     assert refused.status_code == 422
 
 

@@ -7,7 +7,7 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 | `profiles/sample_resume.txt` | a made-up trainee profile (resume) of one page, the kind of file a trainee uploads |
 | `personas/ms_verma_strict.json` | a persona (validated against `PersonaConfig`) |
 | `scenarios/vendor_delay.json` | a scenario with objections and a good-answer checklist (validated against `ScenarioConfig`); the file shape is what `POST /admin/scenarios/import` takes |
-| `demand/project_demand.json` | the project demand: what the project needs and the client expects (validated against `DemandConfig`) |
+| `demand/project_demand.txt` | a made-up project demand document, the kind an admin uploads (what the project needs and the client expects) |
 | `results/vendor_delay_result.json` | an example of the program's result format (validated against `RoleplayResult`) |
 | `scoring/default.json` | a scoring profile (validated against `ScoringConfig`); not used by the API until scoring is built |
 

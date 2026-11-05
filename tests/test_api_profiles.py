@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import models as m
 from app.ingest import placeholder
-from tests.conftest import ADMIN, ANNA, BEN, SAMPLES, publish_sample_settings
+from tests.conftest import ADMIN, ANNA, BEN, SAMPLES, publish_sample_settings, ready_demand
 
 TXT = (
     b"1. Summary\n\nSix months, $400,000, three teams.\n\n4. Budget\n\n"
@@ -26,7 +26,7 @@ def _row(api, profile_id: str) -> m.Profile:
 
 def _ingest(api) -> None:
     with api.factory() as db:
-        placeholder.ingest(db, api.queued[-1], api.store)
+        placeholder.ingest_profile(db, api.queued[-1], api.store)
 
 
 def test_upload_saves_the_file_and_queues_the_job(api):
@@ -83,16 +83,13 @@ def test_people_only_see_their_own_profiles(api):
     assert len(api.client.get("/api/v1/profiles", headers=ADMIN).json()) == 1
 
 
-def test_after_ingest_the_brief_and_chunks_are_readable(api):
+def test_after_ingest_the_extracted_content_is_readable(api):
     profile_id = _upload(api).json()["id"]
+    assert api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()["content"] is None
     _ingest(api)
     detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
     assert detail["status"] == "ready"
-    assert detail["segment_count"] == 4
-    segments = api.client.get(f"/api/v1/profiles/{profile_id}/segments", headers=ANNA).json()
-    assert [s["seq"] for s in segments] == [1, 2, 3, 4]
-    cited = {sid for item in detail["brief"]["items"] for sid in item["segment_ids"]}
-    assert cited <= {s["id"] for s in segments}  # every citation is a real chunk
+    assert detail["content"] == {"text": TXT.decode().strip()}
 
 
 def test_the_placeholder_marks_unreadable_files_failed(api):
@@ -103,20 +100,21 @@ def test_the_placeholder_marks_unreadable_files_failed(api):
     assert "only reads .txt" in detail["error"]
 
 
-def test_delete_removes_the_file_and_chunks(api):
+def test_delete_removes_the_row_and_the_file(api):
     profile_id = _upload(api).json()["id"]
     _ingest(api)
     uri = _row(api, profile_id).blob_uri
     assert api.client.delete(f"/api/v1/profiles/{profile_id}", headers=BEN).status_code == 404
     assert api.client.delete(f"/api/v1/profiles/{profile_id}", headers=ANNA).status_code == 204
     with api.factory() as db:
-        assert db.scalars(select(m.ProfileSegment)).all() == []
+        assert db.scalars(select(m.Profile)).all() == []
     with pytest.raises(FileNotFoundError):
         api.store.read(uri)
 
 
 def test_a_profile_used_by_a_session_cannot_be_deleted(api):
     publish_sample_settings(api.client)
+    ready_demand(api)
     profile_id = _upload(api).json()["id"]
     _ingest(api)
     started = api.client.post(

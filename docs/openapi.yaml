@@ -640,22 +640,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/profiles/{profile_id}/segments:
+  /api/v1/admin/demand:
+    post:
+      tags:
+      - demand
+      summary: Upload Demand
+      description: Save the file, queue the ingest job, return 202. Poll GET /admin/demand/{id}.
+      operationId: upload_demand_api_v1_admin_demand_post
+      parameters:
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_demand_api_v1_admin_demand_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - profiles
-      summary: List Segments
-      description: The numbered chunks, so the UI can show the text a persona question
-        cites.
-      operationId: list_segments_api_v1_profiles__profile_id__segments_get
+      - demand
+      summary: List Demands
+      operationId: list_demands_api_v1_admin_demand_get
       parameters:
-      - name: profile_id
-        in: path
-        required: true
+      - name: limit
+        in: query
+        required: false
         schema:
-          type: string
-          format: uuid
-          title: Profile Id
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       - name: x-dev-user
         in: header
         required: false
@@ -680,9 +730,89 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Segment'
-                title: Response List Segments Api V1 Profiles  Profile Id  Segments
-                  Get
+                  $ref: '#/components/schemas/DemandOut'
+                title: Response List Demands Api V1 Admin Demand Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/demand/{demand_id}:
+    get:
+      tags:
+      - demand
+      summary: Get Demand
+      operationId: get_demand_api_v1_admin_demand__demand_id__get
+      parameters:
+      - name: demand_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Demand Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - demand
+      summary: Delete Demand
+      operationId: delete_demand_api_v1_admin_demand__demand_id__delete
+      parameters:
+      - name: demand_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Demand Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '204':
+          description: Successful Response
         '422':
           description: Validation Error
           content:
@@ -1195,6 +1325,16 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    Body_upload_demand_api_v1_admin_demand_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_demand_api_v1_admin_demand_post
     Body_upload_profile_api_v1_profiles_post:
       properties:
         file:
@@ -1205,62 +1345,11 @@ components:
       required:
       - file
       title: Body_upload_profile_api_v1_profiles_post
-    Brief:
-      properties:
-        summary:
-          type: string
-          title: Summary
-        items:
-          items:
-            $ref: '#/components/schemas/BriefItem'
-          type: array
-          title: Items
-      type: object
-      required:
-      - summary
-      - items
-      title: Brief
-      description: Structured summary of a profile, stored on `profile.brief`.
-    BriefItem:
-      properties:
-        kind:
-          type: string
-          enum:
-          - claim
-          - assumption
-          - risk
-          - weak_point
-          - inconsistency
-          title: Kind
-        text:
-          type: string
-          title: Text
-        segment_ids:
-          items:
-            type: string
-            format: uuid
-          type: array
-          minItems: 1
-          title: Segment Ids
-      type: object
-      required:
-      - kind
-      - text
-      - segment_ids
-      title: BriefItem
-      description: 'One thing the ingest LLM call found in the profile.
-
-
-        `segment_ids` are the chunks it came from. They are required so the persona
-        can only
-
-        challenge something the profile really says (code checks the ids exist).'
     ConfigKind:
       type: string
       enum:
       - persona
       - scenario
-      - demand
       title: ConfigKind
     ConfigStatus:
       type: string
@@ -1269,6 +1358,83 @@ components:
       - published
       - retired
       title: ConfigStatus
+    DemandDetail:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/IngestStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        uploaded_by:
+          type: string
+          title: Uploaded By
+        content:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Content
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - error
+      - created_at
+      - uploaded_by
+      - content
+      title: DemandDetail
+    DemandOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        filename:
+          type: string
+          title: Filename
+        file_type:
+          $ref: '#/components/schemas/FileType'
+        status:
+          $ref: '#/components/schemas/IngestStatus'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        uploaded_by:
+          type: string
+          title: Uploaded By
+      type: object
+      required:
+      - id
+      - filename
+      - file_type
+      - status
+      - error
+      - created_at
+      - uploaded_by
+      title: DemandOut
     DraftBody:
       properties:
         config:
@@ -1283,7 +1449,6 @@ components:
       type: string
       enum:
       - persona
-      - demand
       title: EditableKind
       description: What an admin may create and edit by hand. Scenarios are only loaded
         with the import.
@@ -1335,6 +1500,14 @@ components:
       - updated
       - unchanged
       title: ImportResult
+    IngestStatus:
+      type: string
+      enum:
+      - queued
+      - extracting
+      - ready
+      - failed
+      title: IngestStatus
     KeyOut:
       properties:
         key:
@@ -1412,7 +1585,7 @@ components:
         file_type:
           $ref: '#/components/schemas/FileType'
         status:
-          $ref: '#/components/schemas/ProfileStatus'
+          $ref: '#/components/schemas/IngestStatus'
         error:
           anyOf:
           - type: string
@@ -1425,13 +1598,12 @@ components:
         owner_ref:
           type: string
           title: Owner Ref
-        brief:
+        content:
           anyOf:
-          - $ref: '#/components/schemas/Brief'
+          - additionalProperties: true
+            type: object
           - type: 'null'
-        segment_count:
-          type: integer
-          title: Segment Count
+          title: Content
       type: object
       required:
       - id
@@ -1441,8 +1613,7 @@ components:
       - error
       - created_at
       - owner_ref
-      - brief
-      - segment_count
+      - content
       title: ProfileDetail
     ProfileOut:
       properties:
@@ -1456,7 +1627,7 @@ components:
         file_type:
           $ref: '#/components/schemas/FileType'
         status:
-          $ref: '#/components/schemas/ProfileStatus'
+          $ref: '#/components/schemas/IngestStatus'
         error:
           anyOf:
           - type: string
@@ -1479,14 +1650,6 @@ components:
       - created_at
       - owner_ref
       title: ProfileOut
-    ProfileStatus:
-      type: string
-      enum:
-      - queued
-      - extracting
-      - ready
-      - failed
-      title: ProfileStatus
     PublishedItem:
       properties:
         key:
@@ -1555,50 +1718,6 @@ components:
       - scenarios
       title: ScenarioImport
       description: 'The same shape as the seed file: {"scenarios": [...]}.'
-    Segment:
-      properties:
-        id:
-          type: string
-          format: uuid
-          title: Id
-        profile_id:
-          type: string
-          format: uuid
-          title: Profile Id
-        seq:
-          type: integer
-          title: Seq
-        page:
-          type: integer
-          title: Page
-        kind:
-          $ref: '#/components/schemas/SegmentKind'
-        text:
-          type: string
-          title: Text
-        ocr_confidence:
-          anyOf:
-          - type: number
-            maximum: 1.0
-            minimum: 0.0
-          - type: 'null'
-          title: Ocr Confidence
-      type: object
-      required:
-      - id
-      - profile_id
-      - seq
-      - page
-      - kind
-      - text
-      title: Segment
-      description: One citable chunk of the profile (a `profile_segment` row).
-    SegmentKind:
-      type: string
-      enum:
-      - text
-      - ocr
-      title: SegmentKind
     SessionDetail:
       properties:
         id:
@@ -1616,10 +1735,12 @@ components:
           title: Profile Id
         persona:
           $ref: '#/components/schemas/VersionRef'
-        demand:
+        demand_id:
           anyOf:
-          - $ref: '#/components/schemas/VersionRef'
+          - type: string
+            format: uuid
           - type: 'null'
+          title: Demand Id
         status:
           $ref: '#/components/schemas/SessionStatus'
         end_reason:
@@ -1656,7 +1777,7 @@ components:
       - trainee_ref
       - profile_id
       - persona
-      - demand
+      - demand_id
       - status
       - end_reason
       - started_at
@@ -1683,10 +1804,12 @@ components:
           title: Profile Id
         persona:
           $ref: '#/components/schemas/VersionRef'
-        demand:
+        demand_id:
           anyOf:
-          - $ref: '#/components/schemas/VersionRef'
+          - type: string
+            format: uuid
           - type: 'null'
+          title: Demand Id
         status:
           $ref: '#/components/schemas/SessionStatus'
         end_reason:
@@ -1718,7 +1841,7 @@ components:
       - trainee_ref
       - profile_id
       - persona
-      - demand
+      - demand_id
       - status
       - end_reason
       - started_at
@@ -1752,12 +1875,6 @@ components:
           - type: integer
           - type: 'null'
           title: Escalation Level
-        refs:
-          items:
-            type: string
-            format: uuid
-          type: array
-          title: Refs
         created_at:
           type: string
           format: date-time
@@ -1775,7 +1892,6 @@ components:
       - role
       - content
       - escalation_level
-      - refs
       - created_at
       title: TurnOut
     TurnRole:

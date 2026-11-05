@@ -1,5 +1,5 @@
-"""Settings endpoints: personas and the project demand are edited by the admin, one version at a
-time; scenarios are loaded once in bulk. Trainees list the published personas.
+"""Settings endpoints: personas are edited by the admin, one version at a time; scenarios are
+loaded once in bulk. Trainees list the published personas.
 
 Every edit is a new numbered version. A draft can change; once published it never does.
 """
@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, get_db, require_role
 from app.db import models as m
-from app.schemas import DemandConfig, PersonaConfig, ScenarioConfig
+from app.schemas import PersonaConfig, ScenarioConfig
 from app.schemas.enums import ConfigKind, ConfigStatus, Role
 
 router = APIRouter(prefix="/api/v1", tags=["settings"])
@@ -29,7 +29,6 @@ admin_or_trainee = require_role(Role.TRAINEE, Role.ADMIN)
 CONFIG_MODELS = {
     ConfigKind.PERSONA: PersonaConfig,
     ConfigKind.SCENARIO: ScenarioConfig,
-    ConfigKind.DEMAND: DemandConfig,
 }
 KEY_PATTERN = r"^[a-z0-9][a-z0-9-]{0,99}$"
 
@@ -38,7 +37,6 @@ class EditableKind(StrEnum):
     """What an admin may create and edit by hand. Scenarios are only loaded with the import."""
 
     PERSONA = "persona"
-    DEMAND = "demand"
 
 
 class VersionOut(BaseModel):
@@ -266,18 +264,6 @@ def published(db: Session, kind: ConfigKind) -> list[m.ConfigVersion]:
             .where(m.ConfigVersion.kind == kind, m.ConfigVersion.status == ConfigStatus.PUBLISHED)
             .order_by(m.ConfigVersion.key)
         )
-    )
-
-
-def current_demand(db: Session) -> m.ConfigVersion | None:
-    """There is one demand for everyone: the most recently saved published one."""
-    return db.scalar(
-        select(m.ConfigVersion)
-        .where(
-            m.ConfigVersion.kind == ConfigKind.DEMAND,
-            m.ConfigVersion.status == ConfigStatus.PUBLISHED,
-        )
-        .order_by(m.ConfigVersion.created_at.desc(), m.ConfigVersion.version_no.desc())
     )
 
 

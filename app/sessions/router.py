@@ -43,7 +43,6 @@ class TurnOut(BaseModel):
     role: TurnRole
     content: str
     escalation_level: int | None
-    refs: list[UUID]
     created_at: datetime
     evaluation: dict | None = None  # admins only
 
@@ -53,7 +52,7 @@ class SessionOut(BaseModel):
     trainee_ref: str
     profile_id: UUID | None
     persona: VersionRef
-    demand: VersionRef | None
+    demand_id: UUID | None
     status: SessionStatus
     end_reason: EndReason | None
     started_at: datetime
@@ -74,7 +73,6 @@ def _turn_out(turn: m.Turn, user: CurrentUser) -> TurnOut:
         role=turn.role,
         content=turn.content,
         escalation_level=turn.escalation_level,
-        refs=turn.refs or [],
         created_at=turn.created_at,
         evaluation=turn.evaluation if user.role == Role.ADMIN else None,
     )
@@ -89,11 +87,7 @@ def _session_fields(loaded: Loaded) -> dict:
         "persona": VersionRef(
             key=loaded.persona_version.key, version_no=loaded.persona_version.version_no
         ),
-        "demand": VersionRef(
-            key=loaded.demand_version.key, version_no=loaded.demand_version.version_no
-        )
-        if loaded.demand_version
-        else None,
+        "demand_id": s.demand_id,
         "status": s.status,
         "end_reason": s.end_reason,
         "started_at": s.started_at,

@@ -10,21 +10,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.agent.engine import ContextTurn, SessionContext, TurnEngine
-from app.api.admin_config import current_demand, latest_published, published
+from app.api.admin_config import latest_published, published
 from app.api.deps import CurrentUser, can_see
 from app.db import models as m
-from app.schemas import (
-    Brief,
-    DemandConfig,
-    Evaluation,
-    PersonaConfig,
-    ScenarioConfig,
-    TurnOutput,
-)
+from app.ingest.demand_router import current_demand
+from app.schemas import Evaluation, PersonaConfig, ScenarioConfig, TurnOutput
 from app.schemas.enums import (
     ConfigKind,
     EndReason,
-    ProfileStatus,
+    IngestStatus,
     Role,
     SessionStatus,
     TurnRole,
@@ -39,15 +33,11 @@ class Loaded:
     def __init__(self, db: Session, session: m.RoleplaySession):
         self.session = session
         self.persona_version = db.get(m.ConfigVersion, session.persona_version_id)
-        self.demand_version = (
-            db.get(m.ConfigVersion, session.demand_version_id)
-            if session.demand_version_id
-            else None
-        )
         self.persona = PersonaConfig.model_validate(self.persona_version.config)
-        self.demand = (
-            DemandConfig.model_validate(self.demand_version.config) if self.demand_version else None
-        )
+        demand = db.get(m.DemandDocument, session.demand_id) if session.demand_id else None
+        profile = db.get(m.Profile, session.profile_id) if session.profile_id else None
+        self.demand = demand.content if demand else None  # what the pipeline extracted
+        self.profile = profile.content if profile else None
         # The scenario dataset is shared: whatever is published now.
         self.scenarios = [
             ScenarioConfig.model_validate(v.config) for v in published(db, ConfigKind.SCENARIO)
@@ -55,20 +45,6 @@ class Loaded:
         self.turns = list(
             db.scalars(select(m.Turn).where(m.Turn.session_id == session.id).order_by(m.Turn.idx))
         )
-        self.brief: Brief | None = None
-        self.segment_ids: set[str] = set()
-        if session.profile_id:
-            profile = db.get(m.Profile, session.profile_id)
-            if profile and profile.brief:
-                self.brief = Brief.model_validate(profile.brief)
-            self.segment_ids = {
-                str(i)
-                for i in db.scalars(
-                    select(m.ProfileSegment.id).where(
-                        m.ProfileSegment.profile_id == session.profile_id
-                    )
-                )
-            }
 
     @property
     def trainee_turns(self) -> list[m.Turn]:
@@ -83,8 +59,8 @@ class Loaded:
         return SessionContext(
             persona=self.persona,
             demand=self.demand,
+            profile=self.profile,
             scenarios=self.scenarios,
-            brief=self.brief,
             turns=[
                 ContextTurn(
                     role=t.role,
@@ -113,11 +89,6 @@ def _ask_engine(call: Callable[..., TurnOutput], *args) -> TurnOutput:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "the client could not reply") from None
 
 
-def _real_refs(refs, valid: set[str]) -> list[str]:
-    """Keep only citations that point at real chunks of this session's profile."""
-    return [str(r) for r in refs if str(r) in valid]
-
-
 def start_session(
     db: Session,
     engine: TurnEngine,
@@ -130,20 +101,20 @@ def start_session(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no published persona with that key")
     demand = current_demand(db)
     if demand is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "no project demand has been published")
+        raise HTTPException(status.HTTP_409_CONFLICT, "no demand document is ready")
     if not published(db, ConfigKind.SCENARIO):
         raise HTTPException(status.HTTP_409_CONFLICT, "no scenarios have been loaded")
     profile = db.get(m.Profile, profile_id)
     if profile is None or not can_see(user, profile.owner_ref):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
-    if profile.status != ProfileStatus.READY:
+    if profile.status != IngestStatus.READY:
         raise HTTPException(status.HTTP_409_CONFLICT, "the profile is not ready yet")
 
     session = m.RoleplaySession(
         trainee_ref=user.user_ref,
         profile_id=profile_id,
         persona_version_id=persona.id,
-        demand_version_id=demand.id,
+        demand_id=demand.id,
         status=SessionStatus.ACTIVE,
     )
     db.add(session)
@@ -157,7 +128,6 @@ def start_session(
             role=TurnRole.PERSONA,
             content=out.reply,
             escalation_level=1,
-            refs=_real_refs(out.refs, loaded.segment_ids),
         )
     )
     db.commit()
@@ -202,7 +172,6 @@ def take_turn(
         role=TurnRole.PERSONA,
         content=out.reply,
         escalation_level=level,
-        refs=_real_refs(out.refs, loaded.segment_ids),
     )
     db.add_all([trainee, persona])
 

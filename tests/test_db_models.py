@@ -14,12 +14,12 @@ from app.schemas.enums import (
     ConfigKind,
     ConfigStatus,
     FileType,
-    ProfileStatus,
+    IngestStatus,
     SessionStatus,
     TurnRole,
 )
 
-EXPECTED_TABLES = {"config_version", "profile", "profile_segment", "session", "turn"}
+EXPECTED_TABLES = {"config_version", "profile", "demand_document", "session", "turn"}
 
 
 def test_exactly_the_planned_tables():
@@ -52,7 +52,7 @@ def _chain(db, with_profile: bool = True) -> tuple[RoleplaySession, Turn]:
             file_type=FileType.TXT,
             sha256="0" * 64,
             blob_uri="storage/p.txt",
-            status=ProfileStatus.READY,
+            status=IngestStatus.READY,
         )
         db.add(profile)
         db.flush()
