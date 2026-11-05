@@ -1,8 +1,10 @@
-"""Settings endpoints: the admin edits personas and scenarios; trainees list the published ones.
+"""Settings endpoints: personas and the project demand are edited by the admin, one version at a
+time; scenarios are loaded once in bulk. Trainees list the published personas.
 
 Every edit is a new numbered version. A draft can change; once published it never does.
 """
 
+import re
 from datetime import datetime
 from uuid import UUID
 
@@ -15,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, get_db, require_role
 from app.db import models as m
-from app.schemas import PersonaConfig, ScenarioConfig
+from app.schemas import DemandConfig, PersonaConfig, ScenarioConfig
 from app.schemas.enums import ConfigKind, ConfigStatus, Role
 
 router = APIRouter(prefix="/api/v1", tags=["settings"])
@@ -23,7 +25,11 @@ router = APIRouter(prefix="/api/v1", tags=["settings"])
 admin_only = require_role(Role.ADMIN)
 admin_or_trainee = require_role(Role.TRAINEE, Role.ADMIN)
 
-CONFIG_MODELS = {ConfigKind.PERSONA: PersonaConfig, ConfigKind.SCENARIO: ScenarioConfig}
+CONFIG_MODELS = {
+    ConfigKind.PERSONA: PersonaConfig,
+    ConfigKind.SCENARIO: ScenarioConfig,
+    ConfigKind.DEMAND: DemandConfig,
+}
 KEY_PATTERN = r"^[a-z0-9][a-z0-9-]{0,99}$"
 
 
@@ -240,13 +246,26 @@ def latest_published(db: Session, kind: ConfigKind, key: str) -> m.ConfigVersion
     )
 
 
-def _published(db: Session, kind: ConfigKind) -> list[m.ConfigVersion]:
+def published(db: Session, kind: ConfigKind) -> list[m.ConfigVersion]:
+    """The published version of every key of this kind, ordered by key."""
     return list(
         db.scalars(
             select(m.ConfigVersion)
             .where(m.ConfigVersion.kind == kind, m.ConfigVersion.status == ConfigStatus.PUBLISHED)
             .order_by(m.ConfigVersion.key)
         )
+    )
+
+
+def current_demand(db: Session) -> m.ConfigVersion | None:
+    """There is one demand for everyone: the most recently saved published one."""
+    return db.scalar(
+        select(m.ConfigVersion)
+        .where(
+            m.ConfigVersion.kind == ConfigKind.DEMAND,
+            m.ConfigVersion.status == ConfigStatus.PUBLISHED,
+        )
+        .order_by(m.ConfigVersion.created_at.desc(), m.ConfigVersion.version_no.desc())
     )
 
 
@@ -259,18 +278,72 @@ def list_personas(_: CurrentUser = Depends(admin_or_trainee), db: Session = Depe
             title=r.config.get("name", r.key),
             summary=r.config.get("role", ""),
         )
-        for r in _published(db, ConfigKind.PERSONA)
+        for r in published(db, ConfigKind.PERSONA)
     ]
 
 
-@router.get("/scenarios", response_model=list[PublishedItem])
-def list_scenarios(_: CurrentUser = Depends(admin_or_trainee), db: Session = Depends(get_db)):
-    return [
-        PublishedItem(
-            key=r.key,
-            version_no=r.version_no,
-            title=r.config.get("title", r.key),
-            summary=r.config.get("situation", "")[:200],
+class ScenarioImport(BaseModel):
+    """The same shape as the seed file: {"scenarios": [...]}."""
+
+    scenarios: list[ScenarioConfig] = Field(min_length=1, max_length=500)
+
+
+class ImportResult(BaseModel):
+    created: list[str]
+    updated: list[str]
+    unchanged: list[str]
+
+
+def _scenario_key(scenario_id: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", scenario_id.lower()).strip("-")[:100]
+
+
+@router.post("/admin/scenarios/import", response_model=ImportResult)
+def import_scenarios(
+    body: ScenarioImport, _: CurrentUser = Depends(admin_only), db: Session = Depends(get_db)
+):
+    """Load the scenario dataset in one go. Each scenario is published straight away.
+
+    The key comes from the scenario's `id`. A new key starts at version 1; a changed scenario
+    becomes the next version and retires the old one; an identical one is left alone, so the
+    same file can be sent again safely.
+    """
+    keyed: dict[str, dict] = {}
+    for scenario in body.scenarios:
+        key = _scenario_key(scenario.id)
+        if not key or key in keyed:
+            raise HTTPException(422, f"scenario id {scenario.id!r} is empty or repeated")
+        keyed[key] = scenario.model_dump(mode="json")
+
+    result = ImportResult(created=[], updated=[], unchanged=[])
+    for key, config in keyed.items():
+        latest = db.scalar(
+            select(m.ConfigVersion)
+            .where(m.ConfigVersion.kind == ConfigKind.SCENARIO, m.ConfigVersion.key == key)
+            .order_by(m.ConfigVersion.version_no.desc())
         )
-        for r in _published(db, ConfigKind.SCENARIO)
-    ]
+        same = latest is not None and latest.config == config
+        if same and latest.status == ConfigStatus.PUBLISHED:
+            result.unchanged.append(key)
+            continue
+        if latest is not None:
+            for old in db.scalars(
+                select(m.ConfigVersion).where(
+                    m.ConfigVersion.kind == ConfigKind.SCENARIO,
+                    m.ConfigVersion.key == key,
+                    m.ConfigVersion.status == ConfigStatus.PUBLISHED,
+                )
+            ):
+                old.status = ConfigStatus.RETIRED
+        db.add(
+            m.ConfigVersion(
+                kind=ConfigKind.SCENARIO,
+                key=key,
+                version_no=latest.version_no + 1 if latest else 1,
+                status=ConfigStatus.PUBLISHED,
+                config=config,
+            )
+        )
+        (result.updated if latest else result.created).append(key)
+    _commit(db)
+    return result

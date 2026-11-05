@@ -20,9 +20,9 @@ Pod C's agent for the Multi-Agent Training Evaluation Platform ("The Tough Clien
 13. [Glossary](#glossary)
 
 ## What it does
-1. **Setup.** An admin saves a **persona** (who the client is, their rules and escalation ladder), and a **scenario** (the situation, the client's objections, and a checklist of what a good answer contains). Each edit is a new numbered version. (Scoring profiles come later with scoring.)
+1. **Setup.** An admin saves a **persona** (who the client is, their rules and escalation ladder), and the project **demand** (what the project needs, from the Gama team). Personas and the demand are saved as numbered versions. The **scenarios** (situations the client can raise) are loaded once in bulk, and the agent chooses among them itself. (Scoring profiles come later with scoring.)
 2. **Optional proposal.** A trainee can upload a proposal (PDF, DOCX or TXT). Scanned pages are read with OCR. The system builds a short **brief** of its claims, budget, timeline and weak points so the client can challenge the trainee on their own document.
-3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit, when the checklist is covered, or when someone ends it.
+3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit or when someone ends it.
 4. **The mark** (not built yet). A scoring job rates the trainee on a few skills. Every point cites a real chat message, and code checks the quote is genuinely there.
 5. **Review and handoff** (not built yet). An admin approves or overrides the suggested mark, a report is generated, and the result goes out in the program's **roleplay-result** format for Pod D.
 
@@ -93,7 +93,7 @@ Settings come from `PODC_*` environment variables; copy `.env.example` to `.env`
 All paths start with `/api/v1`. The full, always-current list is `docs/openapi.yaml` (regenerate it with `uv run python -m app.export_openapi` after changing an endpoint). Until real login exists, send `X-Dev-User` and `X-Dev-Role` headers.
 | Area | Endpoints | Who |
 |---|---|---|
-| Settings | `GET /personas`, `GET /scenarios` (published only); `GET/POST /admin/config/{persona or scenario}`, `POST .../{key}/versions`, `GET/PUT .../versions/{n}` (drafts only), `POST .../versions/{n}/publish` | trainee, admin |
+| Settings | `GET /personas` (published only); `POST /admin/scenarios/import` (admin, loads all scenarios at once); `GET/POST /admin/config/{persona, scenario or demand}`, `POST .../{key}/versions`, `GET/PUT .../versions/{n}` (drafts only), `POST .../versions/{n}/publish` | trainee, admin |
 | Proposals | `POST /proposals` (202, then poll), `GET /proposals`, `GET /proposals/{id}`, `GET /proposals/{id}/segments`, `DELETE /proposals/{id}` | owner, admin |
 | Chat | `POST /sessions`, `GET /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns` (needs an `Idempotency-Key` header; replies as a server-sent event stream), `POST /sessions/{id}/end` | owner, admin |
 | Planned (answer 501) | `GET /sessions/{id}/assessment`, `GET /admin/review-queue`, `POST /admin/assessments/{id}/review` and `/rescore`, `GET /assessments/{id}/report`, `GET /integration/signals` | scoring owner |
@@ -138,7 +138,7 @@ The program's seed pack is marked **UST CONFIDENTIAL: do not copy outside the pr
 Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interface are deliberately out of scope for now.
 
 ## Status and open questions
-**Done:** repository scaffold (shared data shapes, `FakeLLM`, made-up samples, tests that also pass against the real seed pack); the 5 tables (migration `0002` trimmed the original 12); the settings, proposal and session/chat APIs with a placeholder ingest and a placeholder agent.
+**Done:** repository scaffold (shared data shapes, `FakeLLM`, made-up samples, tests that also pass against the real seed pack); the 5 tables (the first draft had 12; scoring, review, reports and the logs are left out for now); the settings, proposal and session/chat APIs with a placeholder ingest and a placeholder agent.
 
 **Next:** the real ingestion (parsing, OCR, brief) and the real agent, both behind the interfaces above; then scoring, review and reports; the real LLM client once API keys arrive; retries and the 30-day deletion job for background work.
 

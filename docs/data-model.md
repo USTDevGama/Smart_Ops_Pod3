@@ -1,8 +1,8 @@
 # Data model
 
-The system remembers things in **5 tables** (PostgreSQL in real use, SQLite in tests). This page explains each table, each column and why it is there. The source of truth is `app/db/models.py`. Migrations are in `alembic/versions/`: `0001` created the first 12 tables and `0002` trimmed them to these 5.
+The system remembers things in **5 tables** (PostgreSQL in real use, SQLite in tests). This page explains each table, each column and why it is there. The source of truth is `app/db/models.py`. The migration is `alembic/versions/0001_initial.py`, which creates exactly these 5 tables (it replaces the earlier three migrations, since nothing is deployed yet). If you ran the older migrations, delete your local database and run `alembic upgrade head` again.
 
-**What was removed, and why.** Users, scoring, review, reports, the AI-call log and the audit log are not being built now, so their tables were dropped: `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. They come back, through a new migration, when those features are built. The data shapes for scoring and the program's result format are still in `app/schemas/` for that work.
+**What was removed, and why.** Users, scoring, review, reports, the AI-call log and the audit log are not being built now, so their tables were removed (they were in the first draft of the schema): `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. They come back, through a new migration, when those features are built. The data shapes for scoring and the program's result format are still in `app/schemas/` for that work.
 
 Plain-words key:
 - **id**: every table has one. A unique row number (a UUID).
@@ -11,10 +11,27 @@ Plain-words key:
 - **Never edited**: rows that are only ever added, so the record cannot be quietly changed.
 - **`*_ref`**: a plain text name of the logged-in user (the `X-Dev-User` header for now). There is no user table; real login arrives later.
 
-## How the tables connect
+## Changes after the architect call (05-Nov)
+The call changed what the system is for. It is a strict-client round, in effect a managerial round. The agent compares the **demand** (what the project needs, given by the Gama team) with the trainee's **profile** (their resume), and asks questions that fit both. It gets tougher or easier by itself depending on how the trainee answers. The technical interview is a different agent, and the trainees' training history is a background process. Neither is ours.
+
+**Built**
+| What was said | What changed in the tables |
+|---|---|
+| The **demand** comes from the Gama team as master data. The agent always knows it | New `config_version` kind `demand`. **One demand for everyone**: the most recently saved published one is used. `session.demand_version_id` records which version a chat started with |
+| **Scenarios are not configured by an admin.** The agent works out the level of questioning itself, from a one-time dataset | Scenarios stay in `config_version` (our database), loaded in bulk. The trainee no longer picks one, so `session.scenario_version_id` is now **empty for new sessions** (the column is kept, optional) |
+| A chat **ends only at `max_turns`** (plus `grace_turns` while answers improve), or when someone ends it | The "all checklist items covered" ending was removed. `end_reason` `concerns_resolved` is no longer produced |
+| The profile is the main input of a chat | `session.proposal_id` is still empty-able in the table (old rows), but the API now **requires** a ready one |
+| The **persona** stays configurable | No change |
+
+**Not built yet**
+- The trainee uploads **only a profile (resume)**: 1 to 3 pages, PDF, DOCX or TXT, no images, figures or scans. So `proposal` is really a profile, and OCR is not needed (`proposal_segment.kind = ocr` and `ocr_confidence` stay unused). Renaming `proposal` to `profile` (and the `/proposals` paths to `/profiles`) is deferred until Kedar agrees, because the ingestion code he is writing uses the current names.
+- The `brief` should become a short profile summary (skills, roles, projects, years) instead of "claims and weak points". That is Kedar's part.
+- Whether the scenario dataset should instead live in the agent's own store (Shubra's side). For now it is in our table and is passed to the agent.
+
+## How the tables connect (today)
 ```mermaid
 erDiagram
-  config_version ||--o{ session : "persona and scenario versions"
+  config_version ||--o{ session : "persona and demand versions"
   proposal ||--o{ proposal_segment : "split into chunks"
   proposal |o--o{ session : "optional"
   session ||--o{ turn : "chat messages"
@@ -22,15 +39,15 @@ erDiagram
 
 ## Settings
 
-### `config_version` - every saved persona and scenario
-One table holds both kinds, because they work the same way: the admin edits, and each edit saves a **new numbered version**. Published rows are never changed, so an old chat can always be explained by the exact settings it used.
+### `config_version` - every saved persona, scenario and demand
+One table holds all three kinds, because they work the same way: each change saves a **new numbered version**. Personas and the demand are edited by an admin; scenarios are loaded in bulk. Published rows are never changed, so an old chat can always be explained by the exact settings it used.
 | Column | Why it is there |
 |---|---|
-| `kind` | `persona` (the AI client) or `scenario` (the situation and the checklist of what a good answer contains). |
+| `kind` | `persona` (the AI client), `scenario` (a situation the client can raise, with its objections) or `demand` (what the project needs and expects, from the Gama team). |
 | `key` | A stable name for the thing, for example `verma-strict` or `vendor-delay`. |
 | `version_no` | 1, 2, 3... for each edit of that key. Together `kind` + `key` + `version_no` must be unique. |
 | `status` | `draft` (still being edited), `published` (usable), `retired` (replaced by a newer published version). |
-| `config` | All the settings as JSON. The shape is checked by `PersonaConfig` or `ScenarioConfig` before saving. |
+| `config` | All the settings as JSON. The shape is checked by `PersonaConfig`, `ScenarioConfig` or `DemandConfig` before saving. |
 | `created_at` | When this version was saved. |
 
 ## The uploaded proposal
@@ -64,9 +81,10 @@ Each chunk can be pointed at, so the persona can cite one and code can check it 
 | Column | Why it is there |
 |---|---|
 | `trainee_ref` | Who is playing (the login user). |
-| `proposal_id` -> `proposal` | The proposal being discussed. **Optional**: a session can run on the scenario alone. |
+| `proposal_id` -> `proposal` | The trainee's profile. The API requires one that is `ready`; the column can be empty only on old rows. |
 | `persona_version_id` -> `config_version` | The exact persona version used. |
-| `scenario_version_id` -> `config_version` | The exact scenario version used. |
+| `demand_version_id` -> `config_version` | The exact demand version the chat started with. May be empty. |
+| `scenario_version_id` -> `config_version` | No longer set: the agent picks scenarios itself. Old sessions keep their value. |
 | `status` | `active` or `ended`. |
 | `end_reason` | Why it ended: trainee ended it, turn limit, all checklist items covered, time limit, or admin. |
 | `started_at`, `ended_at` | Timing. `ended_at` starts the 30-day deletion clock. |

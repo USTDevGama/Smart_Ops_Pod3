@@ -12,6 +12,7 @@ class Role(StrEnum):
 class ConfigKind(StrEnum):
     PERSONA = "persona"
     SCENARIO = "scenario"
+    DEMAND = "demand"
 
 
 class ConfigStatus(StrEnum):

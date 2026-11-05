@@ -7,9 +7,9 @@ Every value comes from our own made-up files in samples/ (nothing from the confi
 pack). Ids are deterministic, so running it twice does not add duplicates. Local and dev
 databases only.
 
-The story: a trainee plays the "vendor late" scenario against Ms. Verma and ends the chat. A
-second, still-active session uses an uploaded proposal, so you can also see proposal chunks and
-the persona citing one.
+The story: a trainee uploads a profile, and plays against Ms. Verma. The first chat is finished;
+the second is still open and shows the persona citing a chunk of the profile. The project demand
+and the scenarios are shared master data.
 """
 
 import hashlib
@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import models as m
 from app.db.base import Base
-from app.schemas import Brief, BriefItem, Evaluation, PersonaConfig, ScenarioConfig
+from app.schemas import Brief, BriefItem, DemandConfig, Evaluation, PersonaConfig, ScenarioConfig
 from app.schemas.enums import (
     ConfigKind,
     ConfigStatus,
@@ -68,10 +68,16 @@ def load_demo_data(db: Session) -> dict[str, int]:
 
     trainee_ref = "demo-trainee"
 
-    # --- settings: persona and scenario (both validated by their schemas) ------------------
+    # --- settings: persona, scenario and demand (all validated by their schemas) -----------
     persona_cfg = PersonaConfig.model_validate(_load("personas/ms_verma_strict.json"))
     scenario_cfg = ScenarioConfig.model_validate(
         _load("scenarios/vendor_delay.json")["scenarios"][0]
+    )
+    demand_cfg = DemandConfig.model_validate(_load("demand/project_demand.json"))
+    demand = m.ConfigVersion(
+        id=_id("cfg-demand"), kind=ConfigKind.DEMAND, key="gama-project", version_no=1,
+        status=ConfigStatus.PUBLISHED, config=demand_cfg.model_dump(mode="json"),
+        created_at=_at(-16),
     )
     persona = m.ConfigVersion(
         id=_id("cfg-persona"), kind=ConfigKind.PERSONA, key="verma-strict", version_no=1,
@@ -83,7 +89,7 @@ def load_demo_data(db: Session) -> dict[str, int]:
         status=ConfigStatus.PUBLISHED, config=scenario_cfg.model_dump(mode="json"),
         created_at=_at(-17),
     )
-    db.add_all([persona, scenario])
+    db.add_all([persona, scenario, demand])
     db.flush()
 
     # --- an uploaded proposal, cut into two citable chunks ---------------------------------
@@ -117,16 +123,16 @@ def load_demo_data(db: Session) -> dict[str, int]:
     ])
     db.flush()
 
-    # --- two sessions: S1 scenario-only and finished, S2 with the proposal and still open --
+    # --- two sessions on the profile: S1 finished, S2 still open -----------------------------
     s1 = m.RoleplaySession(
-        id=_id("session-1"), trainee_ref=trainee_ref, proposal_id=None,
-        persona_version_id=persona.id, scenario_version_id=scenario.id,
+        id=_id("session-1"), trainee_ref=trainee_ref, proposal_id=proposal.id,
+        persona_version_id=persona.id, demand_version_id=demand.id,
         status=SessionStatus.ENDED,
         end_reason=EndReason.TRAINEE_ENDED, started_at=_at(0), ended_at=_at(6),
     )
     s2 = m.RoleplaySession(
         id=_id("session-2"), trainee_ref=trainee_ref, proposal_id=proposal.id,
-        persona_version_id=persona.id, scenario_version_id=scenario.id,
+        persona_version_id=persona.id, demand_version_id=demand.id,
         status=SessionStatus.ACTIVE,
         started_at=_at(30),
     )

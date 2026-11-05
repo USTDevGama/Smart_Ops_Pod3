@@ -399,12 +399,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/scenarios:
-    get:
+  /api/v1/admin/scenarios/import:
+    post:
       tags:
       - settings
-      summary: List Scenarios
-      operationId: list_scenarios_api_v1_scenarios_get
+      summary: Import Scenarios
+      description: 'Load the scenario dataset in one go. Each scenario is published
+        straight away.
+
+
+        The key comes from the scenario''s `id`. A new key starts at version 1; a
+        changed scenario
+
+        becomes the next version and retires the old one; an identical one is left
+        alone, so the
+
+        same file can be sent again safely.'
+      operationId: import_scenarios_api_v1_admin_scenarios_import_post
       parameters:
       - name: x-dev-user
         in: header
@@ -422,16 +433,19 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioImport'
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PublishedItem'
-                title: Response List Scenarios Api V1 Scenarios Get
+                $ref: '#/components/schemas/ImportResult'
         '422':
           description: Validation Error
           content:
@@ -680,7 +694,7 @@ paths:
       tags:
       - sessions
       summary: Create Session
-      description: 'Start a chat: pins the latest published persona and scenario,
+      description: 'Start a chat on a ready profile: pins the persona and demand,
         and the client speaks first.'
       operationId: create_session_api_v1_sessions_post
       parameters:
@@ -1246,6 +1260,7 @@ components:
       enum:
       - persona
       - scenario
+      - demand
       title: ConfigKind
     ConfigStatus:
       type: string
@@ -1289,6 +1304,29 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    ImportResult:
+      properties:
+        created:
+          items:
+            type: string
+          type: array
+          title: Created
+        updated:
+          items:
+            type: string
+          type: array
+          title: Updated
+        unchanged:
+          items:
+            type: string
+          type: array
+          title: Unchanged
+      type: object
+      required:
+      - created
+      - updated
+      - unchanged
+      title: ImportResult
     KeyOut:
       properties:
         key:
@@ -1324,19 +1362,14 @@ components:
         persona_key:
           type: string
           title: Persona Key
-        scenario_key:
-          type: string
-          title: Scenario Key
         proposal_id:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
+          type: string
+          format: uuid
           title: Proposal Id
       type: object
       required:
       - persona_key
-      - scenario_key
+      - proposal_id
       title: NewSession
     NewTurn:
       properties:
@@ -1467,6 +1500,53 @@ components:
       - title
       - summary
       title: PublishedItem
+    ScenarioConfig:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        situation:
+          type: string
+          title: Situation
+        client_objections:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Client Objections
+        good_answer_contains:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Good Answer Contains
+      type: object
+      required:
+      - id
+      - title
+      - situation
+      - client_objections
+      - good_answer_contains
+      title: ScenarioConfig
+      description: The situation the client is upset about, and what a good answer
+        must contain.
+    ScenarioImport:
+      properties:
+        scenarios:
+          items:
+            $ref: '#/components/schemas/ScenarioConfig'
+          type: array
+          maxItems: 500
+          minItems: 1
+          title: Scenarios
+      type: object
+      required:
+      - scenarios
+      title: ScenarioImport
+      description: 'The same shape as the seed file: {"scenarios": [...]}.'
     Segment:
       properties:
         id:
@@ -1528,8 +1608,10 @@ components:
           title: Proposal Id
         persona:
           $ref: '#/components/schemas/VersionRef'
-        scenario:
-          $ref: '#/components/schemas/VersionRef'
+        demand:
+          anyOf:
+          - $ref: '#/components/schemas/VersionRef'
+          - type: 'null'
         status:
           $ref: '#/components/schemas/SessionStatus'
         end_reason:
@@ -1566,7 +1648,7 @@ components:
       - trainee_ref
       - proposal_id
       - persona
-      - scenario
+      - demand
       - status
       - end_reason
       - started_at
@@ -1593,8 +1675,10 @@ components:
           title: Proposal Id
         persona:
           $ref: '#/components/schemas/VersionRef'
-        scenario:
-          $ref: '#/components/schemas/VersionRef'
+        demand:
+          anyOf:
+          - $ref: '#/components/schemas/VersionRef'
+          - type: 'null'
         status:
           $ref: '#/components/schemas/SessionStatus'
         end_reason:
@@ -1626,7 +1710,7 @@ components:
       - trainee_ref
       - proposal_id
       - persona
-      - scenario
+      - demand
       - status
       - end_reason
       - started_at

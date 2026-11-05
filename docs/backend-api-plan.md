@@ -6,11 +6,26 @@ The scaffold is pushed. The team then narrowed what we build next:
 - **Shubra** owns the **agent**: how one client reply is produced. It is not yet decided whether that is LangGraph or a plain LLM call with a prompt (LangChain), so our code must not depend on that choice.
 - **Disha** owns scoring, review and reports. We only list placeholder endpoints for those.
 - **We** build the backend APIs and their logic: settings, proposals, sessions, and the chat plumbing (storing turns, limits, safety checks). We call the agent through a small fixed interface.
-- These tables are **not needed now** and were dropped in migration `0002`: `app_user`, `audit_log`, `llm_call_log`, `assessment`, `assessment_evidence`, `review` (and `report`, which only pointed at `assessment`). The scoring-profile setting and `session.scoring_profile_version_id` were dropped too; scoring will add them back when it is built.
+- These tables are **not needed now** and were removed from the schema: `app_user`, `audit_log`, `llm_call_log`, `assessment`, `assessment_evidence`, `review` (and `report`, which only pointed at `assessment`). The scoring-profile setting and `session.scoring_profile_version_id` were dropped too; scoring will add them back when it is built.
 
 The earlier design still holds: one LLM call per chat turn, plain code enforces the rules, no RAG, trainee text is treated as data, nothing important lives only in Redis.
 
-## 1. Database trim (migration 0002)
+## Update after the architect call (05-Nov)
+The call clarified that the trainee uploads only a **profile (resume)**, the **demand** comes from the Gama team as master data, and the agent chooses the level of questioning from the scenario dataset itself. The team decided: **one demand for everyone**, a chat **ends only at `max_turns`**, and **scenarios live in our database**. The table changes are in [data-model.md](data-model.md). Sections 1 to 6 below were written before the call; where they differ, this table wins.
+
+| Area | Now |
+|---|---|
+| Settings: persona | unchanged: create, version, edit, publish |
+| Settings: demand | new kind `demand` (`DemandConfig`: name, description, stack, expectations). Same admin endpoints as persona. One demand is in force: the most recently saved published one |
+| Settings: scenario | `POST /admin/scenarios/import` loads the whole dataset in one go (same shape as the seed file, `{"scenarios": [...]}`), published straight away; a new id is created, a changed one becomes the next version, an identical one is left alone. `GET /scenarios` is **removed**. The generic admin list and read endpoints still work for scenarios |
+| `POST /sessions` | body `{persona_key, proposal_id}`. `proposal_id` is **required** and must be the caller's and `ready`. 409 if no demand is published or no scenarios are loaded. `scenario_key` is gone |
+| Session responses | `demand` (key and version) replaces `scenario` |
+| Ending | only `max_turns` (plus `grace_turns` while answers improve), the trainee ending it, or an admin ending it. `concerns_resolved` is no longer produced |
+| Agent interface (`TurnEngine`, Shubra) | `SessionContext` now holds `demand`, **all** published `scenarios`, the profile summary (`brief`), the turns, the level and `turns_used`. The single `scenario` and `open_checklist` are gone. Shubra needs to see this before building on it |
+
+Not done yet: renaming `proposal` to `profile` and `/proposals` to `/profiles` (waiting for Kedar, whose ingestion code uses the current names), and the profile-shaped `brief`.
+
+## 1. Database trim
 | Change | Detail |
 |---|---|
 | Dropped 7 tables | `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log` |
@@ -34,10 +49,10 @@ Left with 5 tables: `config_version`, `proposal`, `proposal_segment`, `session`,
 Roles are `trainee`, `admin` and `integrator`, sent as dev headers for now.
 
 ### 3.1 Settings (`app/api/admin_config.py`)
-Kinds: `persona` and `scenario`. A body is validated with `PersonaConfig` or `ScenarioConfig`.
+Kinds: `persona`, `scenario` and `demand`. A body is validated with `PersonaConfig`, `ScenarioConfig` or `DemandConfig`. Scenarios are normally loaded with the import endpoint (see the update above).
 | Endpoint | Who | Does |
 |---|---|---|
-| `GET /personas`, `GET /scenarios` | trainee, admin | the **published** ones, so a trainee can start a session |
+| `GET /personas` | trainee, admin | the **published** ones, so a trainee can start a session |
 | `GET /admin/config/{kind}` | admin | keys with all their versions and status |
 | `POST /admin/config/{kind}` | admin | new key at version 1 as `draft`; 409 if the key exists |
 | `POST /admin/config/{kind}/{key}/versions` | admin | new draft version (max + 1), copied from the latest unless a body is given |
@@ -70,11 +85,11 @@ class TurnEngine(Protocol):
     def opening(self, ctx: SessionContext) -> TurnOutput: ...
     def respond(self, ctx: SessionContext, answer: str) -> TurnOutput: ...
 ```
-`SessionContext` holds the persona, scenario, brief (or none), previous turns, current level, open checklist items and turns used. `TurnOutput` is in `app/schemas/conversation.py` (evaluation, reply, refs). The engine is chosen in `get_engine()`. Until the real one lands, `PlaceholderEngine` (`app/agent/placeholder.py`) answers with canned logic and **no LLM**, so every endpoint works and is tested.
+`SessionContext` holds the persona, the demand, all scenarios, the profile summary, previous turns, current level and turns used. `TurnOutput` is in `app/schemas/conversation.py` (evaluation, reply, refs). The engine is chosen in `get_engine()`. Until the real one lands, `PlaceholderEngine` (`app/agent/placeholder.py`) answers with canned logic and **no LLM**, so every endpoint works and is tested.
 
 | Endpoint | Who | Does |
 |---|---|---|
-| `POST /sessions` | trainee, admin | body `{persona_key, scenario_key, proposal_id?}`. Uses the latest **published** persona and scenario (404 if none). A proposal must be the caller's and `ready` (409 if not). The client's opening message is saved as turn 0 |
+| `POST /sessions` | trainee, admin | body `{persona_key, proposal_id}`. Uses the latest **published** persona (404 if none) and the current demand. The profile must be the caller's and `ready` (409 if not). The client's opening message is saved as turn 0 |
 | `GET /sessions`, `GET /sessions/{id}` | owner, admin | list (filter `status`; admin `trainee_ref`); detail with turns, current level, `turns_used`, `max_turns`. Only admins see each answer's `evaluation` |
 | `POST /sessions/{id}/turns` | owner | body `{content}`, header `Idempotency-Key` (required). Replies as a server-sent event stream: `message`, then `done` |
 | `POST /sessions/{id}/end` | owner, admin | ends the session (`trainee_ended`, or `admin_ended` when an admin ends someone else's). Repeating it is harmless. Calls the no-op `on_session_ended` hook where scoring plugs in |
@@ -86,7 +101,7 @@ class TurnEngine(Protocol):
 4. Keep only `refs` that are real chunks of this session's proposal.
 5. Clamp the level: it moves at most one step from the previous level and stays within 1 to the persona's top step. The engine's own escalation logic is Shubra's; this only guarantees the rule.
 6. Save the trainee turn (with its evaluation) and the client turn in one transaction. Two simultaneous sends are stopped by the unique (session_id, idx) constraint (409).
-7. End the session if the trainee has used `max_turns` (plus `grace_turns` only while answers are improving), reason `turn_cap`; or if every checklist item is met and `min_turns` is reached, reason `concerns_resolved`.
+7. End the session if the trainee has used `max_turns` (plus `grace_turns` only while answers are improving), reason `turn_cap`.
 8. Reply with `message` (the client's turn) then `done` (`level`, `turns_used`, `ended`, `end_reason`, `replayed`). The reply is sent when ready, not word by word; real token streaming would need the engine to support it and is a later change.
 
 `max_turns` counts trainee messages (the program's open question: messages or exchanges).
@@ -100,7 +115,7 @@ Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers
 ## 4. Who builds what
 | Owner | Work |
 |---|---|
-| Dev D | migration `0002`, shared plumbing, later the real LLM provider and background-job retries and schedules |
+| Dev D | the schema migration, shared plumbing, later the real LLM provider and background-job retries and schedules |
 | Dev A | proposal endpoints and glue |
 | Dev B | sessions and chat plumbing, the `TurnEngine` interface |
 | Dev C | settings endpoints |

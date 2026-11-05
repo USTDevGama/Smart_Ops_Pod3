@@ -122,11 +122,7 @@ def test_a_proposal_used_by_a_session_cannot_be_deleted(api):
     started = api.client.post(
         "/api/v1/sessions",
         headers=ANNA,
-        json={
-            "persona_key": "verma-strict",
-            "scenario_key": "vendor-delay",
-            "proposal_id": proposal_id,
-        },
+        json={"persona_key": "verma-strict", "proposal_id": proposal_id},
     )
     assert started.status_code == 201
     assert api.client.delete(f"/api/v1/proposals/{proposal_id}", headers=ANNA).status_code == 409
