@@ -9,8 +9,12 @@ step of escalation at a time, `refs` must be real chunks).
 
 from typing import Protocol
 
+from fastapi import Depends
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_llm
+from app.config import get_settings
+from app.llm.base import LLMClient
 from app.schemas import Brief, Evaluation, PersonaConfig, ScenarioConfig, TurnOutput
 from app.schemas.enums import TurnRole
 
@@ -42,8 +46,16 @@ class TurnEngine(Protocol):
         ...
 
 
-def get_engine() -> TurnEngine:
-    """The one place to switch to the real engine."""
+def get_engine(llm: LLMClient = Depends(get_llm)) -> TurnEngine:
+    """The one place to switch to the real engine.
+
+    While `PODC_LLM_PROVIDER=fake` (the default, no API key) the LLM-free placeholder answers,
+    because the fake model cannot produce the structured replies the real engine needs. Any other
+    provider uses the real engine, which calls the model through `get_llm`.
+    """
+    from app.agent.llm_engine import LLMTurnEngine
     from app.agent.placeholder import PlaceholderEngine
 
-    return PlaceholderEngine()
+    if get_settings().llm_provider == "fake":
+        return PlaceholderEngine()
+    return LLMTurnEngine(llm)
