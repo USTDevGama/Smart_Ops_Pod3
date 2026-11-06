@@ -10,7 +10,8 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,  # a crashed worker's task is redelivered
     task_default_queue="ingest",
     task_routes={
-        "ingest_proposal": {"queue": "ingest"},
+        "ingest_profile": {"queue": "ingest"},
+        "ingest_demand": {"queue": "ingest"},
         "sweep_stuck_jobs": {"queue": "ingest"},
         "run_assessment": {"queue": "assess"},
         "render_report": {"queue": "report"},

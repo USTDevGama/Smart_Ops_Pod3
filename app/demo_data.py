@@ -7,9 +7,9 @@ Every value comes from our own made-up files in samples/ (nothing from the confi
 pack). Ids are deterministic, so running it twice does not add duplicates. Local and dev
 databases only.
 
-The story: a trainee plays the "vendor late" scenario against Ms. Verma and ends the chat. A
-second, still-active session uses an uploaded proposal, so you can also see proposal chunks and
-the persona citing one.
+The story: an admin uploaded the project demand document, and a trainee uploaded their profile
+(resume). The trainee plays against Ms. Verma. The first chat is finished; the second is still
+open. The scenarios are shared master data.
 """
 
 import hashlib
@@ -24,14 +24,13 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import models as m
 from app.db.base import Base
-from app.schemas import Brief, BriefItem, Evaluation, PersonaConfig, ScenarioConfig
+from app.schemas import Evaluation, PersonaConfig, ScenarioConfig
 from app.schemas.enums import (
     ConfigKind,
     ConfigStatus,
     EndReason,
     FileType,
-    ProposalStatus,
-    SegmentKind,
+    IngestStatus,
     SessionStatus,
     TurnRole,
 )
@@ -86,47 +85,36 @@ def load_demo_data(db: Session) -> dict[str, int]:
     db.add_all([persona, scenario])
     db.flush()
 
-    # --- an uploaded proposal, cut into two citable chunks ---------------------------------
-    raw = (SAMPLES / "proposals" / "billing_migration.txt").read_bytes()
-    blocks = [b.strip() for b in raw.decode("utf-8").split("\n\n") if b.strip()]
-    budget_text = next(b for b in blocks if b.startswith("4. Budget"))
-    vendor_text = next(b for b in blocks if b.startswith("6. Vendors"))
-    seg_budget, seg_vendor = _id("seg-budget"), _id("seg-vendor")
-    brief = Brief(
-        summary="Six-month, $400,000 migration of billing to microservices with three teams.",
-        items=[
-            BriefItem(kind="weak_point", segment_ids=[seg_budget],
-                      text="The detailed budget breakdown is deferred until after approval"),
-            BriefItem(kind="risk", segment_ids=[seg_vendor],
-                      text="CloudPay is the only payment gateway and its contract is not signed"),
-        ],
+    # --- the demand document (admin) and a trainee profile; the extracted text is kept as JSON
+    demand_raw = (SAMPLES / "demand" / "project_demand.txt").read_bytes()
+    demand_sha = hashlib.sha256(demand_raw).hexdigest()
+    demand = m.DemandDocument(
+        id=_id("demand"), uploaded_by="demo-admin", filename="project_demand.txt",
+        file_type=FileType.TXT, sha256=demand_sha, blob_uri=f"storage/{demand_sha[:12]}.txt",
+        status=IngestStatus.READY, content={"text": demand_raw.decode("utf-8").strip()},
+        created_at=_at(-16),
     )
+    raw = (SAMPLES / "profiles" / "sample_resume.txt").read_bytes()
     sha = hashlib.sha256(raw).hexdigest()
-    proposal = m.Proposal(
-        id=_id("proposal"), owner_ref=trainee_ref, filename="billing_migration.txt",
+    profile = m.Profile(
+        id=_id("profile"), owner_ref=trainee_ref, filename="sample_resume.txt",
         file_type=FileType.TXT, sha256=sha, blob_uri=f"storage/{sha[:12]}.txt",
-        status=ProposalStatus.READY, brief=brief.model_dump(mode="json"), created_at=_at(25),
+        status=IngestStatus.READY, content={"text": raw.decode("utf-8").strip()},
+        created_at=_at(25),
     )
-    db.add(proposal)
-    db.flush()
-    db.add_all([
-        m.ProposalSegment(id=seg_budget, proposal_id=proposal.id, seq=1, page=1,
-                          kind=SegmentKind.TEXT, text=budget_text),
-        m.ProposalSegment(id=seg_vendor, proposal_id=proposal.id, seq=2, page=1,
-                          kind=SegmentKind.TEXT, text=vendor_text),
-    ])
+    db.add_all([demand, profile])
     db.flush()
 
-    # --- two sessions: S1 scenario-only and finished, S2 with the proposal and still open --
+    # --- two sessions on the profile: S1 finished, S2 still open -----------------------------
     s1 = m.RoleplaySession(
-        id=_id("session-1"), trainee_ref=trainee_ref, proposal_id=None,
-        persona_version_id=persona.id, scenario_version_id=scenario.id,
+        id=_id("session-1"), trainee_ref=trainee_ref, profile_id=profile.id,
+        persona_version_id=persona.id, demand_id=demand.id,
         status=SessionStatus.ENDED,
         end_reason=EndReason.TRAINEE_ENDED, started_at=_at(0), ended_at=_at(6),
     )
     s2 = m.RoleplaySession(
-        id=_id("session-2"), trainee_ref=trainee_ref, proposal_id=proposal.id,
-        persona_version_id=persona.id, scenario_version_id=scenario.id,
+        id=_id("session-2"), trainee_ref=trainee_ref, profile_id=profile.id,
+        persona_version_id=persona.id, demand_id=demand.id,
         status=SessionStatus.ACTIVE,
         started_at=_at(30),
     )
@@ -153,18 +141,16 @@ def load_demo_data(db: Session) -> dict[str, int]:
             id=_id(f"s1-turn-{idx}"), session_id=s1.id, idx=idx,
             role=TurnRole.PERSONA if is_client else TurnRole.TRAINEE, content=item["text"],
             escalation_level=levels[idx] if is_client else None,
-            refs=[] if is_client else None,
             evaluation=evaluations[idx].model_dump(mode="json") if idx in evaluations else None,
             idempotency_key=None if is_client else f"k-{idx:04d}",
             created_at=_at(0, 10 + 70 * idx),
         )
     s2_opening = m.Turn(
         id=_id("s2-turn-0"), session_id=s2.id, idx=0, role=TurnRole.PERSONA, escalation_level=1,
-        content=("Your proposal says a detailed budget breakdown will be shared after approval. "
-                 "Why should I approve $400,000 without one?"),
-        refs=[str(seg_budget)], created_at=_at(30, 5),
+        content=("Your resume says the payments service shipped two weeks late, and our invoicing "
+                 "release is due in ten days. Why should I believe this one will be on time?"),
+        created_at=_at(30, 5),
     )
-    assert "detailed breakdown" in budget_text  # the chunk it cites really says this
     db.add_all([*turns.values(), s2_opening])
     db.flush()
 

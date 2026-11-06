@@ -1,11 +1,7 @@
-from uuid import uuid4
-
 import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
-    Brief,
-    BriefItem,
     Evaluation,
     PersonaConfig,
     ScenarioConfig,
@@ -71,12 +67,6 @@ def test_scenario_needs_objections_and_a_checklist():
         )
 
 
-def test_brief_item_requires_a_source_chunk():
-    with pytest.raises(ValidationError):
-        BriefItem(kind="claim", text="Budget is $400k", segment_ids=[])
-    Brief(summary="s", items=[BriefItem(kind="claim", text="x", segment_ids=[uuid4()])])
-
-
 def test_evaluation_bounds():
     with pytest.raises(ValidationError):
         Evaluation(answer_quality=1.5, quote="q", proposed_level=1)
@@ -96,6 +86,5 @@ def test_turn_output_roundtrip():
             proposed_level=2,
         ),
         reply="'Options' is not a plan.",
-        refs=[uuid4()],
     )
     assert TurnOutput.model_validate_json(out.model_dump_json()) == out

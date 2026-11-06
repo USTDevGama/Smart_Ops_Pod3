@@ -1,0 +1,63 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 898 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+14 TL
+(PROFILE: Sample Trainee, Software Engineer) Tj T*
+() Tj T*
+(\(Made-up sample for development. Not a real trainee.\)) Tj T*
+() Tj T*
+(1. Summary) Tj T*
+() Tj T*
+(Backend engineer with three years of Java and Spring Boot. Has led a small team and likes) Tj T*
+(owning delivery.) Tj T*
+() Tj T*
+(2. Experience) Tj T*
+() Tj T*
+(Led the billing service rewrite for a logistics client over six months with three developers.) Tj T*
+(The invoicing service shipped on time and the payments service shipped two weeks late.) Tj T*
+() Tj T*
+(3. Skills) Tj T*
+() Tj T*
+(Java, Spring Boot, React, PostgreSQL, Docker.) Tj T*
+() Tj T*
+(4. Projects) Tj T*
+() Tj T*
+(Integrated an external supplier's tracking module. The supplier delivered ten days late and) Tj T*
+(the client was informed the same week.) Tj T*
+() Tj T*
+(5. Certifications) Tj T*
+() Tj T*
+(None yet.) Tj T*
+() Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000185 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1260
+%%EOF

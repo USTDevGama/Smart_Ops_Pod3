@@ -1,7 +1,8 @@
 """The 5 tables. Only Dev D writes migrations for changes here.
 
 Scoring, review, reports, users, the AI-call log and the audit log are not built yet; their
-tables were dropped in migration 0002 and come back when those features are built.
+tables were removed (the first migration creates only these 5) and come back, through a new
+migration, when those features are built.
 """
 
 import uuid
@@ -10,7 +11,6 @@ from datetime import datetime
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     String,
@@ -25,8 +25,7 @@ from app.schemas.enums import (
     ConfigStatus,
     EndReason,
     FileType,
-    ProposalStatus,
-    SegmentKind,
+    IngestStatus,
     SessionStatus,
     TurnRole,
 )
@@ -47,10 +46,10 @@ class ConfigVersion(Base):
     created_at: Mapped[datetime] = created_at_col()
 
 
-class Proposal(Base):
-    """An uploaded file and what we learned from it."""
+class Profile(Base):
+    """A trainee's uploaded resume. Whatever the pipeline extracts is kept as JSON."""
 
-    __tablename__ = "proposal"
+    __tablename__ = "profile"
 
     id: Mapped[uuid.UUID] = uuid_pk()
     owner_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
@@ -58,39 +57,47 @@ class Proposal(Base):
     file_type: Mapped[FileType] = mapped_column(enum_col(FileType, "file_type"))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     blob_uri: Mapped[str] = mapped_column(String(500))
-    status: Mapped[ProposalStatus] = mapped_column(enum_col(ProposalStatus, "proposal_status"))
-    brief: Mapped[dict | None] = mapped_column(JsonType)
+    status: Mapped[IngestStatus] = mapped_column(enum_col(IngestStatus, "ingest_status"))
+    content: Mapped[dict | None] = mapped_column(JsonType)  # what the pipeline extracted
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = created_at_col()  # also drives the 30-day purge
 
 
-class ProposalSegment(Base):
-    """The proposal split into citable chunks."""
+class DemandDocument(Base):
+    """The project demand document, uploaded by an admin (master data from the Gama team).
 
-    __tablename__ = "proposal_segment"
-    __table_args__ = (UniqueConstraint("proposal_id", "seq"),)
+    It is short, so everything the pipeline extracts goes to the agent as it is; no chunking.
+    """
+
+    __tablename__ = "demand_document"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    proposal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("proposal.id", ondelete="CASCADE"))
-    seq: Mapped[int] = mapped_column(Integer)
-    page: Mapped[int] = mapped_column(Integer)  # 1 for plain text files
-    kind: Mapped[SegmentKind] = mapped_column(enum_col(SegmentKind, "segment_kind"))
-    text: Mapped[str] = mapped_column(Text)
-    ocr_confidence: Mapped[float | None] = mapped_column(Float)
+    uploaded_by: Mapped[str] = mapped_column(String(64))  # the admin (X-Dev-User)
+    filename: Mapped[str] = mapped_column(String(255))
+    file_type: Mapped[FileType] = mapped_column(enum_col(FileType, "file_type"))
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    blob_uri: Mapped[str] = mapped_column(String(500))
+    status: Mapped[IngestStatus] = mapped_column(enum_col(IngestStatus, "ingest_status"))
+    content: Mapped[dict | None] = mapped_column(JsonType)  # what the pipeline extracted
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = created_at_col()
 
 
 class RoleplaySession(Base):
-    """One roleplay run. Pins the exact persona and scenario versions it used."""
+    """One roleplay run. Pins the persona version and the demand document it used."""
 
     __tablename__ = "session"
 
     id: Mapped[uuid.UUID] = uuid_pk()
     trainee_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
-    # Optional: a session can run on the scenario alone. No cascade: the purge job must not
-    # delete a proposal still used by a live session.
-    proposal_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("proposal.id"))
+    # The trainee's profile. The API requires it for new sessions; old rows may be empty. No
+    # cascade: the purge job must not delete a profile still used by a live session.
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("profile.id"))
     persona_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("config_version.id"))
-    scenario_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("config_version.id"))
+    # The demand document in force when the chat started. No cascade, like the profile.
+    demand_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("demand_document.id"))
+    # No longer set: the agent picks scenarios itself. Kept so old sessions still load.
+    scenario_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("config_version.id"))
     status: Mapped[SessionStatus] = mapped_column(enum_col(SessionStatus, "session_status"))
     end_reason: Mapped[EndReason | None] = mapped_column(enum_col(EndReason, "end_reason"))
     started_at: Mapped[datetime] = created_at_col()
@@ -98,7 +105,7 @@ class RoleplaySession(Base):
 
 
 class Turn(Base):
-    """The chat, one row per message. Never edited: the source of truth and the citation target."""
+    """The chat, one row per message. Never edited: the source of truth."""
 
     __tablename__ = "turn"
     __table_args__ = (
@@ -116,7 +123,6 @@ class Turn(Base):
     role: Mapped[TurnRole] = mapped_column(enum_col(TurnRole, "turn_role"))
     content: Mapped[str] = mapped_column(Text)
     escalation_level: Mapped[int | None] = mapped_column(Integer)  # persona rows only
-    refs: Mapped[list | None] = mapped_column(JsonType)  # persona rows: proposal_segment ids
     evaluation: Mapped[dict | None] = mapped_column(JsonType)  # trainee rows only
     idempotency_key: Mapped[str | None] = mapped_column(String(100))  # trainee rows only
     created_at: Mapped[datetime] = created_at_col()

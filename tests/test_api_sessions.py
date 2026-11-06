@@ -4,22 +4,27 @@ from uuid import uuid4
 import pytest
 
 from app.agent.engine import get_engine
-from app.ingest import placeholder
 from app.main import app
 from app.schemas import Evaluation, TurnOutput
-from tests.conftest import ADMIN, ANNA, BEN, load_sample, publish_sample_settings
+from tests.conftest import (
+    ADMIN,
+    ANNA,
+    BEN,
+    load_sample,
+    publish_sample_settings,
+    ready_demand,
+    ready_profile,
+)
 
-START = {"persona_key": "verma-strict", "scenario_key": "vendor-delay"}
-CHECKLIST = load_sample("scenarios/vendor_delay.json")["scenarios"][0]["good_answer_contains"]
+START = {"persona_key": "verma-strict"}
 
 
-def output(quality=0.3, level=2, met=(), refs=(), reply="Be specific."):
+def output(quality=0.3, level=2, met=(), reply="Be specific."):
     return TurnOutput(
         evaluation=Evaluation(
             answer_quality=quality, checklist_met=list(met), quote="x", proposed_level=level
         ),
         reply=reply,
-        refs=list(refs),
     )
 
 
@@ -44,6 +49,7 @@ class ScriptedEngine:
 @pytest.fixture
 def chat(api):
     publish_sample_settings(api.client)
+    ready_demand(api)
 
     def use(outputs):
         engine = ScriptedEngine(outputs)
@@ -55,7 +61,8 @@ def chat(api):
 
 
 def _start(api, headers=ANNA, **extra):
-    return api.client.post("/api/v1/sessions", headers=headers, json=START | extra)
+    body = START | {"profile_id": ready_profile(api, headers["X-Dev-User"])} | extra
+    return api.client.post("/api/v1/sessions", headers=headers, json=body)
 
 
 def _send(api, session_id, text="We will fix it by 9 June", key=None, headers=ANNA):
@@ -86,6 +93,8 @@ def test_the_client_speaks_first(chat):
     body = started.json()
     assert body["status"] == "active"
     assert body["persona"] == {"key": "verma-strict", "version_no": 1}
+    assert body["demand_id"] is not None
+    assert "scenario" not in body  # the agent picks scenarios itself
     assert [(t["idx"], t["role"], t["escalation_level"]) for t in body["turns"]] == [
         (0, "persona", 1)
     ]
@@ -165,55 +174,58 @@ def test_the_session_ends_at_the_turn_limit(chat):
     assert _send(api, session_id).status_code == 409
 
 
-def test_the_session_ends_early_when_the_checklist_is_covered(chat):
+def test_a_covered_checklist_no_longer_ends_the_session(chat):
     api, use = chat
-    use([output(quality=0.9, level=1, met=CHECKLIST)])
+    use([output(quality=0.9, level=1, met=["says who pays", "gives a new date"])])
     _publish_persona(api, min_turns=1)
     session_id = _start(api).json()["id"]
     done = _events(_send(api, session_id))["done"]
-    assert done["ended"] is True
-    assert done["end_reason"] == "concerns_resolved"
+    assert done["ended"] is False  # only the turn limit (or someone ending it) closes a chat
 
 
-def test_the_engine_is_told_which_checklist_items_are_still_open(chat):
+def test_the_engine_is_given_the_demand_and_every_scenario(chat):
     api, use = chat
-    engine = use([output(met=CHECKLIST[:2]), output()])
+    engine = use([output(), output()])
     session_id = _start(api).json()["id"]
     _send(api, session_id)
     _send(api, session_id)
-    assert engine.contexts[0].open_checklist == CHECKLIST
-    assert engine.contexts[1].open_checklist == CHECKLIST[2:]
-    assert engine.contexts[1].turns_used == 1
+    ctx = engine.contexts[1]
+    assert "ten days" in ctx.demand["text"]
+    assert "billing rewrite" in ctx.profile["text"]
+    assert [s.id for s in ctx.scenarios] == ["VD-01"]
+    assert ctx.turns_used == 1
 
 
-def test_invented_citations_are_dropped_and_real_ones_kept(chat):
-    api, use = chat
-    upload = api.client.post("/api/v1/proposals", headers=ANNA,
-                             files={"file": ("p.txt", b"Budget\n\nVendor risk")})
-    proposal_id = upload.json()["id"]
-    with api.factory() as db:
-        placeholder.ingest(db, api.queued[-1], api.store)
-    real = api.client.get(f"/api/v1/proposals/{proposal_id}/segments", headers=ANNA).json()[0]["id"]
-    use([output(refs=[real, str(uuid4())])])
-    session_id = _start(api, proposal_id=proposal_id).json()["id"]
-    assert _get(api, session_id).json()["turns"][0]["refs"] != [None]
-    _send(api, session_id)
-    persona_turn = _get(api, session_id).json()["turns"][-1]
-    assert persona_turn["refs"] == [real]
-
-
-def test_a_session_cannot_start_on_an_unready_or_foreign_proposal(chat):
+def test_a_session_cannot_start_on_an_unready_or_foreign_profile(chat):
     api, use = chat
     use([])
-    upload = api.client.post("/api/v1/proposals", headers=ANNA,
+    upload = api.client.post("/api/v1/profiles", headers=ANNA,
                              files={"file": ("p.txt", b"Budget")})
-    proposal_id = upload.json()["id"]  # still queued
-    assert _start(api, proposal_id=proposal_id).status_code == 409
-    assert _start(api, headers=BEN, proposal_id=proposal_id).status_code == 404
+    profile_id = upload.json()["id"]  # still queued
+    assert _start(api, profile_id=profile_id).status_code == 409
+    assert _start(api, headers=BEN, profile_id=profile_id).status_code == 404
 
 
-def test_starting_needs_published_settings(api):
+def test_starting_needs_a_published_persona(api):
     assert _start(api).status_code == 404
+
+
+def test_starting_needs_a_demand_and_scenarios(api):
+    publish_sample_settings(api.client, scenarios=False)
+    refused = _start(api)
+    assert refused.status_code == 409
+    assert "demand" in refused.json()["detail"]
+    ready_demand(api)
+    refused = _start(api)
+    assert refused.status_code == 409
+    assert "scenarios" in refused.json()["detail"]
+
+
+def test_a_profile_is_required(chat):
+    api, use = chat
+    use([])
+    response = api.client.post("/api/v1/sessions", headers=ANNA, json=START)
+    assert response.status_code == 422
 
 
 def test_people_only_see_their_own_sessions(chat):
