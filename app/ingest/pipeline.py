@@ -1,7 +1,7 @@
-"""The ingest job: read a proposal's file, split it into segments, store them.
+"""The ingest job: read a proposal's file as markdown and store it as one row.
 
-Safe to run twice. A proposal that is already `ready` is left alone, and segments are replaced
-as one unit. Works on the database session it is given, so tests can use SQLite.
+Safe to run twice. A proposal that is already `ready` is left alone, and the stored row is
+replaced as one unit. Works on the database session it is given, so tests can use SQLite.
 """
 
 import re
@@ -13,10 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db.models import Proposal, ProposalSegment
-from app.ingest.chunk import SegmentDraft, to_segments
-from app.ingest.extract import ExtractionError, extract_blocks
+from app.ingest.errors import ExtractionError
+from app.ingest.extract import extract_markdown
 from app.ingest.storage import BlobStore
-from app.schemas.enums import ProposalStatus
+from app.schemas.enums import ProposalStatus, SegmentKind
 
 NO_TEXT = "no readable text was found in the file"
 MISSING = "the uploaded file could not be found"
@@ -33,13 +33,11 @@ def run_ingest(
 
     debug_dir = _debug_dir(settings, proposal)
     try:
-        drafts = _duplicate_drafts(session, proposal) or _read_drafts(
-            proposal, store, settings, debug_dir
-        )
-        if not drafts:
+        text = _duplicate_text(session, proposal) or _read_text(proposal, store)
+        if not text:
             raise ExtractionError(NO_TEXT)
         if debug_dir is not None:
-            _write_segments_dump(debug_dir, drafts)
+            _write_dump(debug_dir, text)
     except ExtractionError as exc:
         _set_status(session, proposal_id, ProposalStatus.FAILED, error=str(exc))
         return
@@ -49,28 +47,15 @@ def run_ingest(
         _set_status(session, proposal_id, ProposalStatus.QUEUED)
         raise
 
-    _store_segments(session, proposal_id, drafts)
+    _store_text(session, proposal_id, text)
     _set_status(session, proposal_id, ProposalStatus.READY)
 
 
-def _read_drafts(
-    proposal: Proposal, store: BlobStore, settings: Settings, debug_dir: Path | None
-) -> list[SegmentDraft]:
+def _read_text(proposal: Proposal, store: BlobStore) -> str:
     path = store.path(proposal.blob_uri)
     if not path.is_file():
         raise ExtractionError(MISSING)
-    blocks = extract_blocks(
-        path,
-        proposal.file_type,
-        ocr_enabled=settings.ocr_enabled,
-        ocr_lang=settings.ocr_lang,
-        ocr_engine=settings.ocr_engine,
-        tesseract_cmd=settings.tesseract_cmd,
-        figures=settings.figures_enabled,
-        figure_descriptions=settings.figure_descriptions,
-        debug_dir=debug_dir,
-    )
-    return to_segments(blocks, settings.segment_max_chars)
+    return extract_markdown(path, proposal.file_type)
 
 
 def _debug_dir(settings: Settings, proposal: Proposal) -> Path | None:
@@ -81,21 +66,14 @@ def _debug_dir(settings: Settings, proposal: Proposal) -> Path | None:
     return Path(settings.ingest_debug_dir) / f"{name}-{str(proposal.id)[:8]}"
 
 
-def _write_segments_dump(debug_dir: Path, drafts: list[SegmentDraft]) -> None:
+def _write_dump(debug_dir: Path, text: str) -> None:
     """A readable copy of what is about to be stored, for a developer to inspect."""
-    lines = [f"{len(drafts)} segment(s)\n"]
-    for draft in drafts:
-        confidence = "-" if draft.ocr_confidence is None else f"{draft.ocr_confidence:.2f}"
-        lines.append(
-            f"=== seq={draft.seq} page={draft.page} kind={draft.kind.value} "
-            f"ocr_confidence={confidence} chars={len(draft.text)}\n{draft.text}\n"
-        )
     debug_dir.mkdir(parents=True, exist_ok=True)
-    (debug_dir / "segments.txt").write_text("\n".join(lines), encoding="utf-8")
+    (debug_dir / "document.md").write_text(text, encoding="utf-8")
 
 
-def _duplicate_drafts(session: Session, proposal: Proposal) -> list[SegmentDraft]:
-    """Same owner, same bytes, already ingested: reuse its segments instead of parsing again."""
+def _duplicate_text(session: Session, proposal: Proposal) -> str:
+    """Same owner, same bytes, already ingested: reuse its text instead of parsing again."""
     twin = session.scalar(
         select(Proposal)
         .where(
@@ -107,36 +85,25 @@ def _duplicate_drafts(session: Session, proposal: Proposal) -> list[SegmentDraft
         .limit(1)
     )
     if twin is None:
-        return []
-    rows = session.scalars(
-        select(ProposalSegment)
+        return ""
+    texts = session.scalars(
+        select(ProposalSegment.text)
         .where(ProposalSegment.proposal_id == twin.id)
         .order_by(ProposalSegment.seq)
     )
-    return [
-        SegmentDraft(
-            seq=row.seq,
-            page=row.page,
-            kind=row.kind,
-            text=row.text,
-            ocr_confidence=row.ocr_confidence,
-        )
-        for row in rows
-    ]
+    return "\n\n".join(texts)
 
 
-def _store_segments(session: Session, proposal_id: uuid.UUID, drafts: list[SegmentDraft]) -> None:
+def _store_text(session: Session, proposal_id: uuid.UUID, text: str) -> None:
     session.execute(delete(ProposalSegment).where(ProposalSegment.proposal_id == proposal_id))
-    session.add_all(
+    session.add(
         ProposalSegment(
             proposal_id=proposal_id,
-            seq=draft.seq,
-            page=draft.page,
-            kind=draft.kind,
-            text=draft.text,
-            ocr_confidence=draft.ocr_confidence,
+            seq=0,
+            page=1,
+            kind=SegmentKind.TEXT,
+            text=text,
         )
-        for draft in drafts
     )
     session.commit()
 

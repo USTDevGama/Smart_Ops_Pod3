@@ -79,7 +79,7 @@ class Proposal(Base):
 
 
 class ProposalSegment(Base):
-    """The proposal split into citable chunks."""
+    """The proposal's text as markdown: one row per proposal for now."""
 
     __tablename__ = "proposal_segment"
     __table_args__ = (UniqueConstraint("proposal_id", "seq"),)
@@ -87,10 +87,9 @@ class ProposalSegment(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     proposal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("proposal.id", ondelete="CASCADE"))
     seq: Mapped[int] = mapped_column(Integer)
-    page: Mapped[int] = mapped_column(Integer)  # 1 for plain text files
+    page: Mapped[int] = mapped_column(Integer)  # always 1 for now
     kind: Mapped[SegmentKind] = mapped_column(enum_col(SegmentKind, "segment_kind"))
     text: Mapped[str] = mapped_column(Text)
-    ocr_confidence: Mapped[float | None] = mapped_column(Float)
 
 
 class RoleplaySession(Base):

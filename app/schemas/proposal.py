@@ -16,7 +16,6 @@ class Segment(BaseModel):
     page: int
     kind: SegmentKind
     text: str
-    ocr_confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 class BriefItem(BaseModel):

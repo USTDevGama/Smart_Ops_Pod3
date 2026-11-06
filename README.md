@@ -21,7 +21,7 @@ Pod C's agent for the Multi-Agent Training Evaluation Platform ("The Tough Clien
 
 ## What it does
 1. **Setup.** An admin saves a **persona** (who the client is, their rules and escalation ladder), a **scenario** (the situation, the client's objections, and a checklist of what a good answer contains) and a **scoring profile** (skills, weights, thresholds). Each edit is a new numbered version.
-2. **Optional proposal.** A trainee can upload a proposal (PDF, DOCX or TXT). Scanned pages are read with OCR. The system builds a short **brief** of its claims, budget, timeline and weak points so the client can challenge the trainee on their own document.
+2. **Optional proposal.** A trainee can upload a proposal (PDF, DOCX or TXT). Only text-based files are read: a scanned PDF is refused. The system builds a short **brief** of its claims, budget, timeline and weak points so the client can challenge the trainee on their own document.
 3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit, when the checklist is covered, or when someone ends it.
 4. **The mark.** A scoring job rates the trainee on a few skills. Every point cites a real chat message, and code checks the quote is genuinely there.
 5. **Review and handoff.** An admin approves or overrides the suggested mark, a report is generated, and the result goes out in the program's **roleplay-result** format for Pod D.
@@ -44,18 +44,18 @@ Four pods build four agents and the TPM connects them on Days 8-9. So we release
  Worker (Celery, same image) <-- jobs via Redis: ingest | assess | report
  Nightly job: delete data 30 days after a session ends
 ```
-- **Chat turns** run inside the API so replies can stream live. **Slow work** (OCR, scoring, PDF) runs as background jobs. Job messages carry IDs only, never text or personal data.
+- **Chat turns** run inside the API so replies can stream live. **Slow work** (reading files, scoring, PDF reports) runs as background jobs. Job messages carry IDs only, never text or personal data.
 - **One LLM call per chat turn** returns an assessment of the trainee's answer and the client's reply. Plain code then enforces the rules (one step tougher at a time, the turn limit). About 11 LLM calls per 8-turn session.
 - **The LLM only judges and speaks.** Counting, weighted maths, quote checking, escalation limits and confidence are plain code.
 - **No RAG.** A proposal fits in the prompt, and every claim in the brief carries the ids of the proposal chunks it came from.
 
 ## Tech stack
-Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + SQLAlchemy + Alembic | Redis + Celery | Tesseract OCR | pytest + ruff | **uv** for environments and dependencies.
+Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + SQLAlchemy + Alembic | Redis + Celery | pdfplumber + python-docx | pytest + ruff | **uv** for environments and dependencies.
 
 ## Repository layout and owners
 | Folder | Purpose | Owner |
 |---|---|---|
-| `app/ingest/` | file parsing, OCR, proposal chunks, the brief, upload endpoints | **Dev A** |
+| `app/ingest/` | file parsing, proposal chunks, the brief, upload endpoints | **Dev A** |
 | `app/reports/` | HTML to PDF report with citations | **Dev A** |
 | `app/agent/` | turn graph, persona prompts, escalation guard, turn limit, session logic | **Dev B** |
 | `app/scoring/` | scoring graph, quote checker, counting signals, weighted blend, confidence, review logic, result output | **Dev C** |
@@ -86,13 +86,9 @@ Optional, for a real database: `docker compose up -d` then `uv run alembic upgra
 To add a dependency: `uv add <package>` and commit both `pyproject.toml` and `uv.lock`.
 **On the company network**, if uv reports an untrusted certificate, set `UV_SYSTEM_CERTS=true` (or add `--system-certs`) so it uses the Windows certificate store. Do not turn verification off.
 
-**Proposal ingestion (Docling)** needs two things on the machine that runs the worker:
-- **OCR for scanned pages** is chosen with `PODC_OCR_ENGINE`. The default, `rapidocr`, needs nothing installed (it runs on PyTorch with models in the Docling cache). `tesseract` needs the Tesseract binary: on Windows install the UB Mannheim build, and if it is not on the PATH set `PODC_TESSERACT_CMD` to the full path of `tesseract.exe`. With Tesseract selected but missing, PDFs with a text layer and DOCX files still ingest, a warning is logged, and a scanned (image-only) PDF is retried instead of being marked failed. TXT files never use OCR. Set `PODC_OCR_ENABLED=false` to turn OCR off completely.
-- Docling's layout and table models, downloaded once from Hugging Face. Behind the company proxy this fails with `CERTIFICATE_VERIFY_FAILED`, so run the download through the Windows certificate store: `uv run --with truststore python -c "import truststore, sys; truststore.inject_into_ssl(); from docling.utils.model_downloader import download_models; download_models(with_layout=True, with_tableformer=True, with_code_formula=False, with_picture_classifier=False, with_rapidocr=True, with_easyocr=False)"`. Do not turn verification off.
+**Proposal ingestion** reads text only, with no OCR and no AI models, so the worker needs nothing installed beyond `uv sync`. PDF files are read with [pdfplumber](https://github.com/jsvine/pdfplumber), DOCX files with python-docx and TXT files directly. The whole proposal is stored as one markdown text in one `proposal_segment` row: DOCX headings become `#` lines and list items `-` lines, and tables in PDF and DOCX become markdown tables. Pictures, charts and figures are ignored, and so is text that exists only inside an image. A PDF with no text layer (a scan) is refused with a clear message ("this PDF has no text layer ... upload a text-based PDF"); in a mixed PDF the picture-only pages are skipped and a warning is logged with the page count. Each PDF page's text is preceded by a `<!-- page N -->` marker, so a citation can name the page; DOCX and TXT have no page markers. Text boxes, headers, footers and footnotes in DOCX are not read.
 
-**Figures.** Charts and pictures in a PDF or DOCX become their own `figure` segments (`PODC_FIGURES_ENABLED`, on by default): the caption, the text Docling reads inside the picture, and the figure type from Docling's classifier. Treat the inside text as partial: on a test chart OCR missed one of the bar values and misread a word. `PODC_FIGURE_DESCRIPTIONS=true` adds a description from a small vision model (it downloads a model on first use), always marked "unverified": on the same chart it invented a value, so it is off by default and must never be quoted as the trainee's own words. DOCX figures get a type and caption but no inside text, because Word files go through a pipeline without OCR.
-
-**Seeing what ingestion produced.** Set `PODC_INGEST_DEBUG_DIR=./ingest-debug` and each proposal gets a folder `<file name>-<id>` with `docling.md` (Docling's own rendering), `segments.txt` (exactly what is stored) and the cropped figure images. Figure counts and types also go to the log at INFO, never the proposal's text. The folder holds proposal content, so it is git-ignored: do not share it, and delete it after use.
+**Seeing what ingestion produced.** Set `PODC_INGEST_DEBUG_DIR=./ingest-debug` and each proposal gets a folder `<file name>-<id>` with `document.md`, exactly what is stored. The folder holds proposal content, so it is git-ignored: do not share it, and delete it after use.
 
 Settings come from `PODC_*` environment variables; copy `.env.example` to `.env`. `PODC_LLM_PROVIDER=fake` (the default) needs no key. Until real login exists, send `X-Dev-User` and `X-Dev-Role` (`trainee`, `admin` or `integrator`) headers; this fake login refuses to start outside `PODC_ENV=local|dev`.
 
@@ -135,7 +131,7 @@ Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interfa
 ## Status and open questions
 **Done:** repository scaffold: shared data shapes (including the program's result format), the 12 tables with the first migration, `FakeLLM`, API skeleton, background-job stubs, made-up samples, and tests that also pass against the real seed pack.
 
-**Next:** one branch per area: ingestion and OCR, the conversation, scoring, then the real LLM client once API keys arrive.
+**Next:** one branch per area: ingestion, the conversation, scoring, then the real LLM client once API keys arrive.
 
 **Open questions for the TPM:**
 - Do proposals stay as an input alongside the scenarios? How do they combine?

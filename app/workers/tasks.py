@@ -12,7 +12,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
 from app.db.session import make_session
-from app.ingest.extract import OcrUnavailable
 from app.ingest.pipeline import run_ingest
 from app.ingest.storage import BlobStore
 from app.workers.celery_app import celery_app
@@ -20,7 +19,7 @@ from app.workers.celery_app import celery_app
 
 @celery_app.task(
     name="ingest_proposal",
-    autoretry_for=(OSError, SQLAlchemyError, OcrUnavailable),
+    autoretry_for=(OSError, SQLAlchemyError),
     retry_backoff=True,
     max_retries=3,
 )

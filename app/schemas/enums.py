@@ -36,8 +36,7 @@ class ProposalStatus(StrEnum):
 
 class SegmentKind(StrEnum):
     TEXT = "text"  # native text from the file
-    OCR = "ocr"  # read from an image by OCR
-    FIGURE = "figure"  # a chart or picture: its caption, text read inside it, and its type
+    OCR = "ocr"  # not produced now that OCR is gone; kept because the schema defines it
 
 
 class SessionStatus(StrEnum):

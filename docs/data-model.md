@@ -14,7 +14,7 @@ erDiagram
   app_user ||--o{ proposal : uploads
   app_user ||--o{ session : plays
   config_version ||--o{ session : "persona, scenario, scoring versions"
-  proposal ||--o{ proposal_segment : "split into chunks"
+  proposal ||--o{ proposal_segment : "holds the text (one row)"
   proposal |o--o{ session : "optional"
   session ||--o{ turn : "chat messages"
   session ||--o{ assessment : "scored as"
@@ -61,16 +61,15 @@ One table holds all three kinds, because they all work the same way: the admin e
 | `error` | Why it failed, if it did. |
 | `created_at` | Also starts the 30-day deletion clock. |
 
-### `proposal_segment` - the proposal cut into numbered chunks
-Each chunk can be pointed at, so the persona can say "page 7 says..." and code can check page 7 really exists.
+### `proposal_segment` - the proposal's text as markdown
+Ingestion stores the whole proposal in one row, so there is no splitting. Each PDF page is preceded by a `<!-- page N -->` marker in the text, so a citation can name the page.
 | Column | Why it is there |
 |---|---|
 | `proposal_id` -> `proposal` | The proposal it belongs to. Deleted along with it. |
-| `seq` | The chunk's order (unique within a proposal). |
-| `page` | The page number. Plain text and Word files have no pages, so they are all page 1. |
-| `kind` | `text` (read directly), `ocr` (read from an image of text) or `figure` (a chart or picture: its caption, text read inside it, and its type, e.g. "bar chart"; one figure per segment). |
-| `text` | The chunk itself. |
-| `ocr_confidence` | How sure the OCR was (0 to 1). Empty for normal text. For a figure it is the OCR confidence of the text read inside it. Low values get flagged, not trusted. |
+| `seq` | Always 0 for now. Kept so the table can hold more than one row later. |
+| `page` | Always 1 for now: the row covers the whole document. Page numbers are in the text as markers. |
+| `kind` | `text`: the only kind produced. `ocr` is defined but not produced, because ingestion does no OCR. |
+| `text` | The whole proposal as markdown: `#` headings, `-` list items, markdown tables. |
 
 ## Group 3: the chat and the mark
 

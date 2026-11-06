@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 
 import pytest
@@ -6,13 +7,13 @@ from sqlalchemy import select
 from app.config import Settings
 from app.db.models import AppUser, Proposal, ProposalSegment
 from app.ingest import pipeline
-from app.ingest.extract import OcrUnavailable
+from app.ingest.pdf_text import NO_TEXT_LAYER
 from app.ingest.pipeline import MISSING, NO_TEXT, run_ingest
 from app.ingest.storage import BlobStore
 from app.schemas.enums import FileType, ProposalStatus, SegmentKind
-from tests.ingest_fixtures import make_chart_png, make_pdf, make_scanned_pdf
+from tests.ingest_fixtures import make_docx, make_pdf, make_scanned_pdf, make_text_pdf
 
-SETTINGS = Settings(ocr_enabled=False, segment_max_chars=200)
+SETTINGS = Settings()
 
 
 @pytest.fixture
@@ -33,7 +34,6 @@ def queue_proposal(db, store, owner, data: bytes, file_type: FileType) -> Propos
     proposal_id = uuid.uuid4()
     key = f"proposals/{proposal_id}/original.{file_type.value}"
     store.save(key, data)
-    import hashlib
 
     proposal = Proposal(
         id=proposal_id,
@@ -49,7 +49,7 @@ def queue_proposal(db, store, owner, data: bytes, file_type: FileType) -> Propos
     return proposal
 
 
-def segments_of(db, proposal_id):
+def stored_rows(db, proposal_id):
     return db.scalars(
         select(ProposalSegment)
         .where(ProposalSegment.proposal_id == proposal_id)
@@ -57,7 +57,13 @@ def segments_of(db, proposal_id):
     ).all()
 
 
-def test_txt_becomes_ready_with_ordered_segments(db, store, owner):
+def stored_text(db, proposal_id) -> str:
+    """The one row that holds the whole document."""
+    (row,) = stored_rows(db, proposal_id)
+    return row.text
+
+
+def test_txt_becomes_ready_with_one_markdown_row(db, store, owner):
     body = b"Budget is 400000.\n\nTimeline is six months.\n\nVendor is CloudPay."
     proposal = queue_proposal(db, store, owner, body, FileType.TXT)
 
@@ -66,20 +72,28 @@ def test_txt_becomes_ready_with_ordered_segments(db, store, owner):
     db.refresh(proposal)
     assert proposal.status is ProposalStatus.READY
     assert proposal.error is None
-    rows = segments_of(db, proposal.id)
-    assert [r.seq for r in rows] == list(range(len(rows)))
-    assert "CloudPay" in " ".join(r.text for r in rows)
-    assert {r.page for r in rows} == {1}
+    (row,) = stored_rows(db, proposal.id)
+    assert row.text == "Budget is 400000.\n\nTimeline is six months.\n\nVendor is CloudPay."
+    assert (row.seq, row.page, row.kind) == (0, 1, SegmentKind.TEXT)
 
 
-def test_running_twice_gives_the_same_segments(db, store, owner):
+def test_a_long_document_is_stored_whole_in_one_row(db, store, owner):
+    body = "\n\n".join(f"Paragraph {n} says the budget is {n} thousand." for n in range(400))
+    proposal = queue_proposal(db, store, owner, body.encode(), FileType.TXT)
+
+    run_ingest(db, proposal.id, store, SETTINGS)
+
+    assert stored_text(db, proposal.id) == body
+
+
+def test_running_twice_gives_the_same_text(db, store, owner):
     proposal = queue_proposal(db, store, owner, b"One.\n\nTwo.", FileType.TXT)
     run_ingest(db, proposal.id, store, SETTINGS)
-    first = [(r.seq, r.text) for r in segments_of(db, proposal.id)]
+    first = stored_text(db, proposal.id)
 
     run_ingest(db, proposal.id, store, SETTINGS)  # a retry: the row is already ready
 
-    assert [(r.seq, r.text) for r in segments_of(db, proposal.id)] == first
+    assert stored_text(db, proposal.id) == first
 
 
 def test_native_pdf_is_ingested(db, store, owner):
@@ -89,7 +103,7 @@ def test_native_pdf_is_ingested(db, store, owner):
     run_ingest(db, proposal.id, store, SETTINGS)
     db.refresh(proposal)
     assert proposal.status is ProposalStatus.READY
-    assert "400000" in " ".join(r.text for r in segments_of(db, proposal.id))
+    assert "400000" in stored_text(db, proposal.id)
 
 
 def test_corrupt_file_fails_with_a_safe_message(db, store, owner):
@@ -101,7 +115,7 @@ def test_corrupt_file_fails_with_a_safe_message(db, store, owner):
     assert proposal.status is ProposalStatus.FAILED
     assert proposal.error == "the file could not be read"
     assert "SECRET" not in proposal.error
-    assert segments_of(db, proposal.id) == []
+    assert stored_rows(db, proposal.id) == []
 
 
 def test_blank_file_fails_with_no_text(db, store, owner):
@@ -123,7 +137,7 @@ def test_missing_blob_fails_cleanly(db, store, owner):
     assert proposal.error == MISSING
 
 
-def test_same_file_from_same_owner_reuses_segments(db, store, owner, monkeypatch):
+def test_same_file_from_same_owner_reuses_the_text(db, store, owner, monkeypatch):
     data = b"Budget is 400000.\n\nNo risks listed."
     first = queue_proposal(db, store, owner, data, FileType.TXT)
     run_ingest(db, first.id, store, SETTINGS)
@@ -131,15 +145,13 @@ def test_same_file_from_same_owner_reuses_segments(db, store, owner, monkeypatch
     def no_parsing(*args, **kwargs):
         raise AssertionError("a duplicate must not be parsed again")
 
-    monkeypatch.setattr(pipeline, "extract_blocks", no_parsing)
+    monkeypatch.setattr(pipeline, "extract_markdown", no_parsing)
     second = queue_proposal(db, store, owner, data, FileType.TXT)
     run_ingest(db, second.id, store, SETTINGS)
 
     db.refresh(second)
     assert second.status is ProposalStatus.READY
-    assert [(r.seq, r.text) for r in segments_of(db, second.id)] == [
-        (r.seq, r.text) for r in segments_of(db, first.id)
-    ]
+    assert stored_text(db, second.id) == stored_text(db, first.id)
 
 
 def test_other_owners_copy_is_not_reused(db, store, owner, monkeypatch):
@@ -150,13 +162,13 @@ def test_other_owners_copy_is_not_reused(db, store, owner, monkeypatch):
     db.commit()
 
     parsed = []
-    real = pipeline.extract_blocks
+    real = pipeline.extract_markdown
 
     def spy(*args, **kwargs):
         parsed.append(True)
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(pipeline, "extract_blocks", spy)
+    monkeypatch.setattr(pipeline, "extract_markdown", spy)
     proposal = queue_proposal(db, store, other, data, FileType.TXT)
     run_ingest(db, proposal.id, store, SETTINGS)
 
@@ -169,7 +181,7 @@ def test_transient_error_puts_the_row_back_in_queued_and_raises(db, store, owner
     def flaky(*args, **kwargs):
         raise OSError("disk hiccup")
 
-    monkeypatch.setattr(pipeline, "extract_blocks", flaky)
+    monkeypatch.setattr(pipeline, "extract_markdown", flaky)
     with pytest.raises(OSError):
         run_ingest(db, proposal.id, store, SETTINGS)
 
@@ -178,88 +190,55 @@ def test_transient_error_puts_the_row_back_in_queued_and_raises(db, store, owner
     assert proposal.error is None
 
 
-NO_OCR_BINARY = Settings(
-    ocr_enabled=True, ocr_engine="tesseract", tesseract_cmd="no-such-tesseract-binary"
-)
-
-
-def test_scanned_pdf_without_tesseract_is_requeued_not_failed(db, store, owner):
-    proposal = queue_proposal(db, store, owner, make_scanned_pdf("Budget 400000"), FileType.PDF)
-
-    with pytest.raises(OcrUnavailable):
-        run_ingest(db, proposal.id, store, NO_OCR_BINARY)
-
-    db.refresh(proposal)
-    assert proposal.status is ProposalStatus.QUEUED  # a retry can succeed once OCR is installed
-    assert proposal.error is None
-
-
-def test_native_pdf_and_txt_ingest_even_when_tesseract_is_missing(db, store, owner):
-    pdf = queue_proposal(db, store, owner, make_pdf(["Budget is 400000."]), FileType.PDF)
-    txt = queue_proposal(db, store, owner, b"Timeline is six months.", FileType.TXT)
-
-    run_ingest(db, pdf.id, store, NO_OCR_BINARY)
-    run_ingest(db, txt.id, store, NO_OCR_BINARY)
-
-    db.refresh(pdf)
-    db.refresh(txt)
-    assert pdf.status is ProposalStatus.READY
-    assert txt.status is ProposalStatus.READY
-
-
-def test_scanned_pdf_is_ingested_with_rapidocr_segments(db, store, owner):
-    proposal = queue_proposal(
-        db, store, owner, make_scanned_pdf("Budget is 400000 dollars"), FileType.PDF
-    )
-
-    run_ingest(db, proposal.id, store, Settings(ocr_enabled=True, ocr_engine="rapidocr"))
-
-    db.refresh(proposal)
-    assert proposal.status is ProposalStatus.READY
-    rows = segments_of(db, proposal.id)
-    assert rows and {r.kind for r in rows} == {SegmentKind.OCR}
-    assert all(r.ocr_confidence is not None for r in rows)
-    assert "400000" in " ".join(r.text for r in rows)
-
-
 def test_debug_dump_is_written_only_when_asked(db, store, owner, tmp_path):
     proposal = queue_proposal(db, store, owner, b"Budget is 400000.", FileType.TXT)
-    run_ingest(db, proposal.id, store, Settings(ocr_enabled=False))  # no debug dir set
+    run_ingest(db, proposal.id, store, Settings())  # no debug dir set
     assert not (tmp_path / "debug").exists()
 
     other = queue_proposal(db, store, owner, b"Timeline is six months.", FileType.TXT)
     debug = tmp_path / "debug"
-    run_ingest(db, other.id, store, Settings(ocr_enabled=False, ingest_debug_dir=str(debug)))
+    run_ingest(db, other.id, store, Settings(ingest_debug_dir=str(debug)))
 
     (folder,) = debug.iterdir()
     assert folder.name.startswith("plan.txt-")  # recognisable by file name
-    dump = (folder / "segments.txt").read_text(encoding="utf-8")
-    assert "1 segment(s)" in dump and "Timeline is six months." in dump
-    assert "kind=text" in dump
+    assert (folder / "document.md").read_text(encoding="utf-8") == "Timeline is six months."
 
 
-def test_pdf_debug_dump_has_docling_output_and_figure_crops(db, store, owner, tmp_path):
-    data = make_pdf(["Budget below."], make_chart_png(), "Figure 1: Budget by quarter")
+def test_scanned_pdf_fails_with_the_clear_message(db, store, owner):
+    proposal = queue_proposal(db, store, owner, make_scanned_pdf("Budget 400000"), FileType.PDF)
+
+    run_ingest(db, proposal.id, store, SETTINGS)
+
+    db.refresh(proposal)
+    assert proposal.status is ProposalStatus.FAILED
+    assert proposal.error == NO_TEXT_LAYER
+    assert stored_rows(db, proposal.id) == []
+
+
+def test_docx_with_a_table_is_ingested(db, store, owner):
+    data = make_docx(
+        [("Budget", "The total budget is 400000.")], table=[["Item", "Cost"], ["A", "1"]]
+    )
+    proposal = queue_proposal(db, store, owner, data, FileType.DOCX)
+
+    run_ingest(db, proposal.id, store, Settings())
+
+    db.refresh(proposal)
+    assert proposal.status is ProposalStatus.READY
+    text = stored_text(db, proposal.id)
+    assert "## Budget" in text and "400000" in text and "| Item | Cost |" in text
+
+
+def test_text_pdf_with_a_table_is_ingested(db, store, owner):
+    data = make_text_pdf([["Options compared"]], table=[["Option", "Cost"], ["A", "100"]])
     proposal = queue_proposal(db, store, owner, data, FileType.PDF)
-    debug = tmp_path / "debug"
 
-    run_ingest(db, proposal.id, store, Settings(ocr_enabled=False, ingest_debug_dir=str(debug)))
+    run_ingest(db, proposal.id, store, Settings())
 
-    (folder,) = debug.iterdir()
-    assert {p.name for p in folder.iterdir()} == {
-        "docling.md",
-        "segments.txt",
-        "figure-1-page1.png",
-    }
-    assert "kind=figure" in (folder / "segments.txt").read_text(encoding="utf-8")
-    assert {r.kind for r in segments_of(db, proposal.id)} == {SegmentKind.TEXT, SegmentKind.FIGURE}
+    db.refresh(proposal)
+    assert proposal.status is ProposalStatus.READY
+    assert "| Option | Cost |" in stored_text(db, proposal.id)
 
 
 def test_unknown_proposal_is_a_no_op(db, store):
     run_ingest(db, uuid.uuid4(), store, SETTINGS)  # must not raise
-
-
-def test_segment_kind_defaults_to_text_for_plain_files(db, store, owner):
-    proposal = queue_proposal(db, store, owner, b"plain", FileType.TXT)
-    run_ingest(db, proposal.id, store, SETTINGS)
-    assert {r.kind for r in segments_of(db, proposal.id)} == {SegmentKind.TEXT}
