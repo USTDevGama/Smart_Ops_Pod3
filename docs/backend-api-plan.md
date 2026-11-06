@@ -60,7 +60,7 @@ The endpoints and the glue are ours. Reading the file is Kedar's.
 | `GET /admin/demand`, `GET /admin/demand/{id}` | admin | list; one document with status, error and `content` |
 | `DELETE /admin/demand/{id}` | admin | 409 if a session uses it; else removes the file and row |
 
-**Hand-off to Kedar.** `ingest_profile(profile_id)` and `ingest_demand(demand_id)` (in `app/workers/tasks.py`) must set `status` to `extracting`, read the file, save whatever they extract as JSON in the row's `content`, and finish `ready`, or `failed` with `error`. The agent gets `content` as it is, so the shape is up to the pipeline. Until then `app/ingest/placeholder.py` stands in: TXT only, `content = {"text": "..."}`.
+**Hand-off to Kedar (done).** `ingest_profile(profile_id)` and `ingest_demand(demand_id)` (in `app/workers/tasks.py`) set `status` to `extracting`, read the file, save what they extract as JSON in the row's `content`, and finish `ready`, or `failed` with `error`. The agent gets `content` as it is. The real reading is in `app/ingest/pipeline.py` (with `extract.py`, `pdf_text.py`, `docx_text.py`): text only, no OCR, `content = {"text": "<markdown>"}`. TXT, DOCX and PDF are read; a scanned PDF or a corrupt file fails with a fixed message that never contains the file's text. A storage or database hiccup is retried (3 times, with backoff): the row goes back to `queued` between tries and ends `failed` if the last try fails. `tests/test_ingest_queue.py` runs upload, dispatch, the Celery task and the status together, without a broker.
 
 ### 3.3 Sessions and chat (`app/sessions/`)
 Two layers keep us independent of how Shubra builds the agent:

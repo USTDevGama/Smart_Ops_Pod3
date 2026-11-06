@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import models as m
-from app.ingest import placeholder
+from app.ingest import pipeline
 from tests.conftest import (
     ADMIN,
     ANNA,
@@ -13,6 +13,7 @@ from tests.conftest import (
     ready_demand,
     ready_profile,
 )
+from tests.ingest_fixtures import make_docx, make_text_pdf
 
 BASE = "/api/v1/admin/demand"
 TXT = b"1. Project\n\nBilling modernisation.\n\n2. Pressure\n\nThe release is due in ten days."
@@ -24,7 +25,7 @@ def _upload(api, headers=ADMIN, name="demand.txt", data=TXT):
 
 def _ingest(api) -> None:
     with api.factory() as db:
-        placeholder.ingest_demand(db, api.queued_demand[-1], api.store)
+        pipeline.ingest_demand(db, api.queued_demand[-1], api.store)
 
 
 def test_only_admins_manage_the_demand_document(api):
@@ -70,12 +71,34 @@ def test_after_ingest_the_whole_text_is_kept_as_content(api):
     assert len(api.client.get(BASE, headers=ADMIN).json()) == 1
 
 
-def test_the_placeholder_marks_unreadable_files_failed(api):
+def test_an_unreadable_file_is_marked_failed_with_a_fixed_message(api):
     demand_id = _upload(api, name="d.pdf", data=b"%PDF-1.7\n").json()["id"]
     _ingest(api)
     detail = api.client.get(f"{BASE}/{demand_id}", headers=ADMIN).json()
     assert detail["status"] == "failed"
-    assert "only reads .txt" in detail["error"]
+    assert detail["error"] == "the file could not be read"
+
+
+def test_a_docx_demand_is_read_as_markdown(api):
+    data = make_docx(
+        [("Project", "Billing modernisation.")], table=[["Role", "Number"], ["Developer", "2"]]
+    )
+    demand_id = _upload(api, name="d.docx", data=data).json()["id"]
+    _ingest(api)
+    detail = api.client.get(f"{BASE}/{demand_id}", headers=ADMIN).json()
+    assert detail["status"] == "ready"
+    text = detail["content"]["text"]
+    assert "## Project" in text and "| Role | Number |" in text
+
+
+def test_a_text_pdf_demand_is_read_with_page_markers(api):
+    data = make_text_pdf([["Project", "", "The release is due in ten days."]])
+    demand_id = _upload(api, name="d.pdf", data=data).json()["id"]
+    _ingest(api)
+    detail = api.client.get(f"{BASE}/{demand_id}", headers=ADMIN).json()
+    assert detail["status"] == "ready"
+    assert detail["content"]["text"].startswith("<!-- page 1 -->")
+    assert "ten days" in detail["content"]["text"]
 
 
 def test_the_sample_demand_document_ingests(api):
