@@ -50,12 +50,12 @@ Four pods build four agents and the TPM connects them on Days 8-9. So we release
 - **No RAG.** The demand and the profile are short, so both go to the agent whole: no chunking and no citations.
 
 ## Tech stack
-Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + SQLAlchemy + Alembic | Redis + Celery | Tesseract OCR | pytest + ruff | **uv** for environments and dependencies.
+Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + SQLAlchemy + Alembic | Redis + Celery | pdfplumber + python-docx (reading uploaded files) | pytest + ruff | **uv** for environments and dependencies.
 
 ## Repository layout and owners
 | Folder | Purpose | Owner |
 |---|---|---|
-| `app/ingest/` | profile and demand upload endpoints (`router.py`, `demand_router.py`, ours) and the real file reading and OCR (`placeholder.py` is a temporary stand-in) | endpoints: **Dev A**; reading the files and OCR: **Kedar** |
+| `app/ingest/` | profile and demand upload endpoints (`router.py`, `demand_router.py`, ours) and the file reading (`pipeline.py`, `extract.py`, `pdf_text.py`, `docx_text.py`: text only, no OCR) | endpoints: **Dev A**; reading the files: **Kedar** |
 | `app/reports/` | HTML to PDF report with citations (not started) | **Disha** |
 | `app/sessions/` | session and chat endpoints, saving turns, the turn limit, the one-step escalation clamp | **Dev B** |
 | `app/agent/` | the turn engine: how one client reply is produced (`TurnEngine`; `placeholder.py` is a temporary stand-in) | **Shubra** |
@@ -100,6 +100,10 @@ All paths start with `/api/v1`. The full, always-current list is `docs/openapi.y
 | Planned (answer 501) | `GET /sessions/{id}/assessment`, `GET /admin/review-queue`, `POST /admin/assessments/{id}/review` and `/rescore`, `GET /assessments/{id}/report`, `GET /integration/signals` | scoring owner |
 Errors always look like `{"type", "title", "status", "detail"}`. For local work without Redis, set `PODC_INGEST_INLINE=true` so an upload is processed inside the request.
 
+**Reading uploaded files** (profile and demand document) is text only, with no OCR and no AI models, so the worker needs nothing installed beyond `uv sync`. PDF files are read with [pdfplumber](https://github.com/jsvine/pdfplumber), DOCX files with python-docx and TXT files directly. The whole document is kept as one markdown text in the row's `content`, as `{"text": "..."}`: DOCX headings become `#` lines and list items `-` lines, tables in PDF and DOCX become markdown tables, and each PDF page's text is preceded by a `<!-- page N -->` marker. Pictures, charts and figures are ignored, and so is text that exists only inside an image. A PDF with no text layer (a scan) fails with a clear message ("this PDF has no text layer ... upload a text-based PDF"); in a mixed PDF the picture-only pages are skipped and a warning with the page count is logged. Text boxes, headers, footers and footnotes in DOCX are not read, and a two-column PDF is read line by line across the columns. An unreadable file fails with a fixed message; the file's own text is never put in an error or a log line.
+
+**Upload, queue and status.** `POST /profiles` and `POST /admin/demand` save the file, return `202` with `status: queued` and send a Celery job (the id only) to the `ingest` queue. Poll `GET /profiles/{id}` or `GET /admin/demand/{id}`: the status goes `queued` -> `extracting` -> `ready` (with `content`) or `failed` (with `error`). A problem with the file fails the row at once and is not retried. A storage or database hiccup puts the row back to `queued` and the job is retried up to 3 times with growing delays; if it still fails, the row ends `failed` ("... upload it again later"), so nothing waits for ever. To run it for real: start Redis (`docker compose up -d redis`), then `uv run celery -A app.workers.celery_app worker -Q ingest -l info` (on Windows add `--pool=solo`; the default pool does not run there), and run the API as usual.
+
 **How the chat is split.** The service (`app/sessions/`) saves turns and enforces the hard rules. It asks the agent for each reply only through `TurnEngine` (`app/agent/engine.py`), so the agent can be a LangGraph graph or one prompt plus one LLM call without touching the service. Until the real agent lands, `PlaceholderEngine` answers with canned logic and no LLM.
 
 ## Looking at the database
@@ -139,9 +143,9 @@ The program's seed pack is marked **UST CONFIDENTIAL: do not copy outside the pr
 Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interface are deliberately out of scope for now.
 
 ## Status and open questions
-**Done:** repository scaffold (shared data shapes, `FakeLLM`, made-up samples, tests that also pass against the real seed pack); the 5 tables (the first draft had 12; scoring, review, reports and the logs are left out for now); the settings, profile and session/chat APIs with a placeholder ingest and a placeholder agent.
+**Done:** repository scaffold (shared data shapes, `FakeLLM`, made-up samples, tests that also pass against the real seed pack); the 5 tables (the first draft had 12; scoring, review, reports and the logs are left out for now); the settings, profile and session/chat APIs with the real file reading (text only) and a placeholder agent.
 
-**Next:** the real file reading (and OCR if needed) and the real agent, both behind the interfaces above; then scoring, review and reports; the real LLM client once API keys arrive; retries and the 30-day deletion job for background work.
+**Next:** the real agent behind the interface above; a live run of the ingest worker against Redis; then scoring, review and reports; the real LLM client once API keys arrive; retries and the 30-day deletion job for background work.
 
 **Open questions for the TPM:**
 - ~~Do profiles stay as an input alongside the scenarios?~~ Answered on the 05-Nov call: the trainee uploads only a profile (resume); the demand comes from the Gama team; scenarios are a one-time dataset the agent picks from.

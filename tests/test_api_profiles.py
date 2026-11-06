@@ -5,8 +5,9 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import models as m
-from app.ingest import placeholder
+from app.ingest import pipeline
 from tests.conftest import ADMIN, ANNA, BEN, SAMPLES, publish_sample_settings, ready_demand
+from tests.ingest_fixtures import make_docx, make_scanned_pdf, make_text_pdf
 
 TXT = (
     b"1. Summary\n\nSix months, $400,000, three teams.\n\n4. Budget\n\n"
@@ -26,7 +27,7 @@ def _row(api, profile_id: str) -> m.Profile:
 
 def _ingest(api) -> None:
     with api.factory() as db:
-        placeholder.ingest_profile(db, api.queued[-1], api.store)
+        pipeline.ingest_profile(db, api.queued[-1], api.store)
 
 
 def test_upload_saves_the_file_and_queues_the_job(api):
@@ -92,12 +93,46 @@ def test_after_ingest_the_extracted_content_is_readable(api):
     assert detail["content"] == {"text": TXT.decode().strip()}
 
 
-def test_the_placeholder_marks_unreadable_files_failed(api):
+def test_an_unreadable_file_is_marked_failed_with_a_fixed_message(api):
     profile_id = _upload(api, name="p.pdf", data=PDF).json()["id"]
     _ingest(api)
     detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
     assert detail["status"] == "failed"
-    assert "only reads .txt" in detail["error"]
+    assert detail["error"] == "the file could not be read"
+    assert detail["content"] is None
+
+
+def test_a_scanned_pdf_is_marked_failed_with_the_scan_message(api):
+    scan = make_scanned_pdf("Led the billing rewrite")
+    profile_id = _upload(api, name="p.pdf", data=scan).json()["id"]
+    _ingest(api)
+    detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
+    assert detail["status"] == "failed"
+    assert "no text layer" in detail["error"]
+
+
+def test_a_docx_resume_is_read_as_markdown(api):
+    data = make_docx(
+        [("Experience", "Led the billing rewrite.")], table=[["Skill", "Years"], ["Python", "6"]]
+    )
+    profile_id = _upload(api, name="r.docx", data=data).json()["id"]
+    _ingest(api)
+    detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
+    assert detail["status"] == "ready"
+    text = detail["content"]["text"]
+    assert "## Experience" in text and "Led the billing rewrite." in text
+    assert "| Skill | Years |" in text
+
+
+def test_a_text_pdf_resume_is_read_with_page_markers(api):
+    data = make_text_pdf([["Experience", "", "Led the billing rewrite."], ["Skills: Python."]])
+    profile_id = _upload(api, name="r.pdf", data=data).json()["id"]
+    _ingest(api)
+    detail = api.client.get(f"/api/v1/profiles/{profile_id}", headers=ANNA).json()
+    assert detail["status"] == "ready"
+    text = detail["content"]["text"]
+    assert text.startswith("<!-- page 1 -->")
+    assert "Led the billing rewrite." in text and "<!-- page 2 -->" in text
 
 
 def test_delete_removes_the_row_and_the_file(api):

@@ -15,7 +15,7 @@ Plain-words key:
 A strict-client round, in effect a managerial round. The agent compares the **demand** (what the project needs, an admin uploads it; it comes from the Gama team) with the trainee's **profile** (their resume, uploaded by the trainee), and asks questions that fit both. It gets tougher or easier by itself depending on how the trainee answers, choosing from a one-time dataset of **scenarios**. The technical interview is a different agent, and the trainees' training history is a background process. Neither is ours.
 
 How that shows up in the tables:
-- **Two plain uploads, no chunking.** Both the profile and the demand document are short, so there is no segment table and no citations. The pipeline (Kedar) reads each file and whatever it extracts is saved as one JSON value in the row's `content` column. The agent gets that JSON as it is.
+- **Two plain uploads, no chunking.** Both the profile and the demand document are short, so there is no segment table and no citations. The pipeline (Kedar) reads each file and whatever it extracts is saved as one JSON value in the row's `content` column. The agent gets that JSON as it is. Today that value is `{"text": "<markdown>"}`: the whole document as markdown, with `#` headings, `-` list items, markdown tables and, for PDFs, a `<!-- page N -->` marker before each page.
 - **One demand for everyone:** the newest demand document that is `ready`.
 - **Scenarios are not configured by hand.** They are loaded in bulk once (an admin sends the whole dataset). The trainee does not pick one.
 - **A chat ends only at `max_turns`** (plus `grace_turns` while answers are improving), or when someone ends it.
