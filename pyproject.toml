@@ -27,6 +27,9 @@ dev = [
     "ruff>=0.5",
     "jsonschema>=4,<5",
 ]
+ui = [
+    "streamlit>=1.40",
+]
 
 [tool.uv]
 # An application, not a library: uv installs the dependencies and we run the code from this folder.

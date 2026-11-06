@@ -1,5 +1,5 @@
 # Shortcuts. Windows without make: run the command on the right of each target instead.
-.PHONY: install check lint test migrate openapi run up down
+.PHONY: install check lint test migrate openapi run ui up down
 
 install:            ## uv sync
 	uv sync
@@ -26,3 +26,6 @@ openapi:            ## uv run python -m app.export_openapi
 
 run:                ## uv run uvicorn app.main:app --reload
 	uv run uvicorn app.main:app --reload
+
+ui:                 ## uv run --group ui streamlit run ui/streamlit_app.py (the API must be running)
+	uv run --group ui streamlit run ui/streamlit_app.py

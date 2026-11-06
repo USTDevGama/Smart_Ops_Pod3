@@ -1,0 +1,6 @@
+[server]
+# The dev login has no password: only this machine may reach the app.
+address = "localhost"
+
+[browser]
+gatherUsageStats = false
