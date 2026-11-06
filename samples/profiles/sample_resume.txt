@@ -1,0 +1,20 @@
+PROFILE: Sample Trainee, Software Engineer
+(Made-up sample for development. Not a real trainee.)
+
+1. Summary
+Backend engineer with three years of Java and Spring Boot. Has led a small team and likes
+owning delivery.
+
+2. Experience
+Led the billing service rewrite for a logistics client over six months with three developers.
+The invoicing service shipped on time and the payments service shipped two weeks late.
+
+3. Skills
+Java, Spring Boot, React, PostgreSQL, Docker.
+
+4. Projects
+Integrated an external supplier's tracking module. The supplier delivered ten days late and
+the client was informed the same week.
+
+5. Certifications
+None yet.

@@ -120,6 +120,8 @@ class ResultBody(BaseModel):
 
 
 class RoleplayResult(BaseModel):
+    """Outgoing Pod D contract, distinct from the raw scoring LLM response."""
+
     contract: Literal["roleplay-result"] = "roleplay-result"
     session_id: str
     scenario_id: str

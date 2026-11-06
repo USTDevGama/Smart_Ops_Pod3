@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "ScoringCriterion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "points": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Points",
+          "type": "number"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/ScoringEvidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "points",
+        "reason"
+      ],
+      "title": "ScoringCriterion",
+      "type": "object"
+    },
+    "ScoringEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "turn": {
+          "minimum": 1,
+          "title": "Turn",
+          "type": "integer"
+        },
+        "polarity": {
+          "enum": [
+            "positive",
+            "negative"
+          ],
+          "title": "Polarity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn",
+        "polarity"
+      ],
+      "title": "ScoringEvidence",
+      "type": "object"
+    },
+    "ScoringNote": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence_turns": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Turns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ScoringNote",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The scoring LLM response, matching samples/results/llm_output.json.",
+  "properties": {
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/ScoringCriterion"
+      },
+      "minItems": 1,
+      "title": "Criteria",
+      "type": "array"
+    },
+    "strengths": {
+      "items": {
+        "$ref": "#/$defs/ScoringNote"
+      },
+      "title": "Strengths",
+      "type": "array"
+    },
+    "gaps": {
+      "items": {
+        "$ref": "#/$defs/ScoringNote"
+      },
+      "title": "Gaps",
+      "type": "array"
+    },
+    "unanswered_objections": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unanswered Objections",
+      "type": "array"
+    }
+  },
+  "required": [
+    "criteria"
+  ],
+  "title": "ScoringOutput",
+  "type": "object"
+}

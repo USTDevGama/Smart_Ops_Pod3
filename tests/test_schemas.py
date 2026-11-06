@@ -1,11 +1,10 @@
-from uuid import uuid4
+import json
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
-    Brief,
-    BriefItem,
     Evaluation,
     PersonaConfig,
     ScenarioConfig,
@@ -42,9 +41,16 @@ def test_weights_must_sum_to_one():
 
 
 def test_sample_llm_scoring_output_is_valid():
-    scoring = ScoringOutput.model_validate(load_sample("results/llm_output.json"))
+    sample = load_sample("results/llm_output.json")
+    scoring = ScoringOutput.model_validate(sample)
     assert [criterion.id for criterion in scoring.criteria] == ["C1", "C2", "C3", "C4"]
     assert scoring.criteria[0].points == pytest.approx(0.5)
+    assert isinstance(sample["criteria"][0]["points"], (int, float))
+
+
+def test_scoring_output_json_schema_matches_model():
+    schema_path = Path(__file__).resolve().parents[1] / "docs" / "scoring_output.schema.json"
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == ScoringOutput.model_json_schema()
 
 
 def test_persona_ladder_steps_must_be_in_order_and_within_1_to_4():
@@ -79,12 +85,6 @@ def test_scenario_needs_objections_and_a_checklist():
         )
 
 
-def test_brief_item_requires_a_source_chunk():
-    with pytest.raises(ValidationError):
-        BriefItem(kind="claim", text="Budget is $400k", segment_ids=[])
-    Brief(summary="s", items=[BriefItem(kind="claim", text="x", segment_ids=[uuid4()])])
-
-
 def test_evaluation_bounds():
     with pytest.raises(ValidationError):
         Evaluation(answer_quality=1.5, quote="q", proposed_level=1)
@@ -104,6 +104,5 @@ def test_turn_output_roundtrip():
             proposed_level=2,
         ),
         reply="'Options' is not a plan.",
-        refs=[uuid4()],
     )
     assert TurnOutput.model_validate_json(out.model_dump_json()) == out
