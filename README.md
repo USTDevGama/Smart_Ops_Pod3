@@ -67,7 +67,8 @@ Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + 
 | `app/workers/` | Celery app and background jobs | **Dev D** (job bodies by the dev named on each task) |
 | `app/seed.py` | loads the confidential seed pack from a local folder | **Dev D** |
 | `alembic/versions/` | database migrations. **Only Dev D writes migrations.** | **Dev D** |
-| `tests/` | automated tests, runnable without Postgres or Docker | everyone |
+| `ui/` | the Streamlit front end: the admin sets the stage and reviews chats, the trainee uploads a resume and chats (it only talks to the API) | **Kedar** |
+| `tests/` | automated tests, runnable without Postgres or Docker (`tests/ui/` for the UI) | everyone |
 | `samples/` | made-up personas, scenarios, profiles, results and scoring profiles | everyone |
 | `docs/` | data model, API description, result schema, AI-use log (one file per developer) | everyone |
 
@@ -88,6 +89,23 @@ To add a dependency: `uv add <package>` and commit both `pyproject.toml` and `uv
 **On the company network**, if uv reports an untrusted certificate, set `UV_SYSTEM_CERTS=true` (or add `--system-certs`) so it uses the Windows certificate store. Do not turn verification off.
 
 Settings come from `PODC_*` environment variables; copy `.env.example` to `.env`. `PODC_LLM_PROVIDER=fake` (the default) needs no key. Until real login exists, send `X-Dev-User` and `X-Dev-Role` (`trainee`, `admin` or `integrator`) headers; this fake login refuses to start outside `PODC_ENV=local|dev`.
+
+### The Streamlit UI
+A small front end that follows the story of one chat. It lives in `ui/`, only talks to the API, and has its own dependency group so the API and worker images stay light.
+```
+uv sync --group ui                                  # once: installs Streamlit
+make run                                            # the API, in one terminal
+uv run --group ui streamlit run ui/streamlit_app.py # the UI, in another (make ui)
+```
+Open http://localhost:8501. The API address is `PODC_API_URL` (default `http://localhost:8000`). For a local run without Redis, start the API with `PODC_INGEST_INLINE=true` so an upload is read straight away; otherwise start the Celery worker (see "Upload, queue and status" below) and the page refreshes the status by itself.
+
+Sign in on the left with a name and a role (the dev login: the pair is sent as the `X-Dev-User` and `X-Dev-Role` headers; there is no password, so the app listens on this machine only, see `.streamlit/config.toml`).
+- **Admin, "Set the stage":** write the character card (a form, validated by the API), publish it (a published version never changes; later edits become a new version), load the situations (one JSON batch) and upload the demand document, then watch it being read.
+- **Admin, "Review chats":** every chat in order, with the score notes on each answer, which trainees never see.
+- **Trainee, "My resume":** upload a PDF, DOCX or TXT file and watch it go `queued` -> `extracting` -> `ready`; the extracted text is shown.
+- **Trainee, "Chat":** pick the client and a ready resume and start; the client speaks first. The page shows the client's mood level and the message count. Every message gets a ticket (the `Idempotency-Key`) first: if the connection drops or the agent cannot reply, nothing is counted, the message stays on screen and "Send it again" reuses the same ticket, so it can never count twice. When the chat ends, the page says why.
+
+`uv run pytest tests/ui` tests the client and the chat rules against the real API, and runs every page headlessly with Streamlit's `AppTest` (those page tests skip when Streamlit is not installed).
 
 ## API at a glance
 All paths start with `/api/v1`. The full, always-current list is `docs/openapi.yaml` (regenerate it with `uv run python -m app.export_openapi` after changing an endpoint). Until real login exists, send `X-Dev-User` and `X-Dev-Role` headers.
