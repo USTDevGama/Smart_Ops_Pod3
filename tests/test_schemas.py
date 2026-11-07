@@ -6,6 +6,7 @@ from app.schemas import (
     PersonaConfig,
     ScenarioConfig,
     ScoringConfig,
+    ScoringOutput,
     TurnOutput,
 )
 from tests.conftest import load_sample
@@ -25,14 +26,21 @@ def test_sample_scenario_is_valid():
 
 def test_sample_scoring_profile_is_valid():
     scoring = ScoringConfig.model_validate(load_sample("scoring/default.json"))
-    assert sum(d.weight for d in scoring.dimensions) == pytest.approx(1.0)
+    assert sum(criterion.weight for criterion in scoring.criteria) == pytest.approx(1.0)
+    assert scoring.rubric_version == "r1"
 
 
 def test_weights_must_sum_to_one():
     data = load_sample("scoring/default.json")
-    data["dimensions"][0]["weight"] = 0.9
+    data["criteria"][0]["weight"] = 0.9
     with pytest.raises(ValidationError):
         ScoringConfig.model_validate(data)
+
+
+def test_sample_llm_scoring_output_is_valid():
+    scoring = ScoringOutput.model_validate(load_sample("results/llm_output.json"))
+    assert [criterion.id for criterion in scoring.criteria] == ["C1", "C2", "C3", "C4"]
+    assert scoring.criteria[0].points == pytest.approx(0.5)
 
 
 def test_persona_ladder_steps_must_be_in_order_and_within_1_to_4():

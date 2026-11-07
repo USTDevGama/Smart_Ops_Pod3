@@ -2,7 +2,7 @@
 
 The system remembers things in **5 tables** (PostgreSQL in real use, SQLite in tests). This page explains each table, each column and why it is there. The source of truth is `app/db/models.py`. The migration is `alembic/versions/0001_initial.py`, which creates exactly these 5 tables (it replaces the earlier migrations, since nothing is deployed yet). If you ran an older version, delete your local database and run `alembic upgrade head` again.
 
-**What was removed, and why.** Users, scoring, review, reports, the AI-call log and the audit log are not being built now, so their tables are not there (they were in the first draft of the schema): `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. They come back, through a new migration, when those features are built. The data shapes for scoring and the program's result format are still in `app/schemas/` for that work.
+**What was removed, and why.** The tables for users, scoring, review, reports, the AI-call log and the audit log are not there (they were in the first draft of the schema): `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. The current plan does not restore dedicated scoring, review, or report tables. Scoring and reports use the pinned settings and transcript as inputs; report artifacts are produced separately. If durable review history or score snapshots become a requirement, decide how to store them before adding schema or migrations. Shared scoring and result contracts live in `app/schemas/`.
 
 Plain-words key:
 - **id**: every table has one. A unique row number (a UUID).

@@ -1162,20 +1162,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/admin/assessments/{assessment_id}/review:
+  /api/v1/admin/sessions/{session_id}/review:
     post:
       tags:
       - planned (not built)
       summary: Review Assessment
-      operationId: review_assessment_api_v1_admin_assessments__assessment_id__review_post
+      operationId: review_assessment_api_v1_admin_sessions__session_id__review_post
       parameters:
-      - name: assessment_id
+      - name: session_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Assessment Id
+          title: Session Id
       - name: x-dev-user
         in: header
         required: false
@@ -1204,20 +1204,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/admin/assessments/{assessment_id}/rescore:
+  /api/v1/admin/sessions/{session_id}/rescore:
     post:
       tags:
       - planned (not built)
       summary: Rescore Assessment
-      operationId: rescore_assessment_api_v1_admin_assessments__assessment_id__rescore_post
+      operationId: rescore_assessment_api_v1_admin_sessions__session_id__rescore_post
       parameters:
-      - name: assessment_id
+      - name: session_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Assessment Id
+          title: Session Id
       - name: x-dev-user
         in: header
         required: false
@@ -1246,20 +1246,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/assessments/{assessment_id}/report:
+  /api/v1/admin/sessions/{session_id}/report:
     get:
       tags:
       - planned (not built)
       summary: Get Report
-      operationId: get_report_api_v1_assessments__assessment_id__report_get
+      operationId: get_report_api_v1_admin_sessions__session_id__report_get
       parameters:
-      - name: assessment_id
+      - name: session_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: Assessment Id
+          title: Session Id
       - name: x-dev-user
         in: header
         required: false

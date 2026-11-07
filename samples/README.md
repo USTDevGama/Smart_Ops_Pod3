@@ -11,9 +11,13 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 | `demand/project_demand.txt` | a made-up project demand document, the kind an admin uploads (what the project needs and the client expects) |
 | `demand/project_demand.docx`, `.pdf` | the same demand document as a Word file and as a PDF with a text layer (built by `scripts/make_samples.py`) |
 | `Sample_Proposal_Store_Inventory_Dashboard.docx` | a longer made-up (fictional) project proposal as a Word file, with headings, lists and four tables; used to check that a real-looking DOCX is read in full |
-| `results/vendor_delay_result.json` | an example of the program's result format (validated against `RoleplayResult`) |
-| `scoring/default.json` | a scoring profile (validated against `ScoringConfig`); not used by the API until scoring is built |
+| `results/vendor_delay_result.json` | a five-message example chat in the program's result format (validated against `RoleplayResult`); `app/demo_data.py` takes its chat text from it |
+| `results/llm_output.json` | raw criterion scores and evidence returned by the scoring LLM |
+| `results/PodC_Sample_Report_v4.md` | the required final Markdown report format |
+| `scoring/default.json` | a criterion rubric and provisional confidence settings (validated against `ScoringConfig`) |
 
-The three dimensions and all weights in `scoring/default.json` are **placeholders**, not from the BRD.
+The overall score is the weighted sum of criterion points multiplied by 100. Confidence weights,
+status cutoffs and other confidence parameters in `scoring/default.json` are provisional and must
+be calibrated against representative cases before production use.
 
 Regenerate the DOCX and PDF versions with `uv run python -m scripts.make_samples`. There is no scanned sample: ingestion does no OCR, and a scanned PDF is refused with a clear message (tested with an image built in the test).

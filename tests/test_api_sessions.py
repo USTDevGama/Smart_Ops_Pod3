@@ -286,9 +286,9 @@ def test_planned_endpoints_answer_501_in_the_standard_shape(api):
     for method, path in (
         ("get", f"/api/v1/sessions/{uuid4()}/assessment"),
         ("get", "/api/v1/admin/review-queue"),
-        ("post", f"/api/v1/admin/assessments/{uuid4()}/review"),
-        ("post", f"/api/v1/admin/assessments/{uuid4()}/rescore"),
-        ("get", f"/api/v1/assessments/{uuid4()}/report"),
+        ("post", f"/api/v1/admin/sessions/{uuid4()}/review"),
+        ("post", f"/api/v1/admin/sessions/{uuid4()}/rescore"),
+        ("get", f"/api/v1/admin/sessions/{uuid4()}/report"),
         ("get", "/api/v1/integration/signals"),
     ):
         response = getattr(api.client, method)(path, headers=ADMIN)

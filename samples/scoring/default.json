@@ -1,12 +1,44 @@
 {
-  "dimensions": [
-    {"key": "responsiveness", "label": "Responsiveness (answered the persona's concerns)", "weight": 0.4, "alpha": 0.4},
-    {"key": "communication", "label": "Communication (clear and specific)", "weight": 0.3, "alpha": 0.4},
-    {"key": "pressure_handling", "label": "Pressure handling (composure and recovery)", "weight": 0.3, "alpha": 0.4}
+  "rubric_version": "r1",
+  "criteria": [
+    {
+      "id": "C1",
+      "label": "owns the delay",
+      "weight": 0.25,
+      "signal_keys": ["has_ownership"]
+    },
+    {
+      "id": "C2",
+      "label": "gives a specific revised date with reason",
+      "weight": 0.25,
+      "signal_keys": ["has_date"]
+    },
+    {
+      "id": "C3",
+      "label": "states the cost impact",
+      "weight": 0.25,
+      "signal_keys": ["has_cost"]
+    },
+    {
+      "id": "C4",
+      "label": "offers a way to prevent repeat",
+      "weight": 0.25,
+      "signal_keys": ["has_commitment"]
+    }
   ],
-  "band_cutoffs": {"production_ready": 90, "enterprise_ready": 75, "needs_remediation": 50},
-  "agreement_gap": 25,
-  "min_findings_pass_rate": 0.8,
-  "scoring_runs": 1,
-  "pass_cutoff": 50
+  "status_cutoffs": {
+    "partly": 0.3,
+    "met": 0.7
+  },
+  "confidence": {
+    "evidence_weight": 0.4,
+    "question_weight": 0.35,
+    "margin_weight": 0.25,
+    "status_margin": 0.1,
+    "invalid_question_penalty": 10,
+    "short_session_turns": 3,
+    "short_session_cap": 60,
+    "high_band": 75,
+    "medium_band": 50
+  }
 }
