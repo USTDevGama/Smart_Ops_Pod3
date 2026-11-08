@@ -1,8 +1,8 @@
 """The 5 tables. Only Dev D writes migrations for changes here.
 
-Scoring and report generation use session, configuration, and turn data; there are no dedicated
-assessment, review, or report tables. Review history or score snapshots would need a separate
-storage decision and migration if they become requirements.
+Scoring, review, reports, users, the AI-call log and the audit log are not stored in dedicated
+tables. Scoring and reports use the session, pinned configuration, and turns as inputs. Review
+history or score snapshots would need a separate storage decision and migration.
 """
 
 import uuid

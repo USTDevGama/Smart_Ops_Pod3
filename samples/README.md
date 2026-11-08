@@ -11,7 +11,8 @@ Made-up data of our own, for local work and tests. It follows the **shape** of t
 | `demand/project_demand.txt` | a made-up project demand document uploaded by an admin |
 | `demand/project_demand.docx`, `.pdf` | the same demand document as Word and text-layer PDF files (built by `scripts/make_samples.py`) |
 | `Sample_Proposal_Store_Inventory_Dashboard.docx` | a fictional long document used as a DOCX extraction test fixture; it is not an additional configurable session input |
-| `results/llm_output.json` | example final criterion scores and evidence in the expected conversation-agent output shape (`points` are JSON numbers) |
+| `results/vendor_delay_result.json` | a five-message example chat in the program's result format (validated against `RoleplayResult`); `app/demo_data.py` takes its chat text from it |
+| `results/llm_output.json` | example final criterion scores and evidence in the scoring model's output shape (`points` are JSON numbers) |
 | `results/PodC_Sample_Report_v4.md` | the required final Markdown report format |
 | `scoring/default.json` | a criterion rubric and provisional confidence settings (validated against `ScoringConfig`) |
 

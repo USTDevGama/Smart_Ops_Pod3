@@ -6,8 +6,7 @@ The scaffold is pushed. The team then narrowed what we build next:
 - **Shubra** owns the **agent**: how one client reply is produced. It is not yet decided whether that is LangGraph or a plain LLM call with a prompt (LangChain), so our code must not depend on that choice.
 - **Disha** owns scoring, review and reports. A standalone scoring processor and report renderer exist; the review workflow and API integration are still pending.
 - **We** build the backend APIs and their logic: settings, profile and demand uploads, sessions, and chat plumbing (storing turns, limits, safety checks). We call the agent through a small fixed interface.
-- Dedicated user, assessment, review, report, AI-call-log and audit-log tables are not in the current schema. Scoring and report generation use session/configuration/transcript data and validated assessment inputs; no dedicated assessment, review, or report tables are planned.
-
+- These dedicated tables are not in the schema: `app_user`, `audit_log`, `llm_call_log`, `assessment`, `assessment_evidence`, `review` (and `report`, which only pointed at `assessment`). The scoring-profile setting is gone too. Current scoring/report work uses the session's pinned settings and transcript; no dedicated assessment, review, or report tables are planned.
 The design still holds: one LLM call per chat turn, plain code enforces the rules, no RAG, trainee text is treated as data, nothing important lives only in Redis.
 
 ## What the architect call (05-Nov) decided
