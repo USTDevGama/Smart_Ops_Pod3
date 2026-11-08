@@ -8,7 +8,7 @@ from app.config import get_settings
 
 
 class BlobStore(Protocol):
-    def save(self, data: bytes, suffix: str, name: str | None = None) -> str: ...
+    def save(self, data: bytes, suffix: str = "", name: str | None = None) -> str: ...
 
     def read(self, uri: str) -> bytes: ...
 
@@ -21,7 +21,7 @@ class LocalBlobStore:
     def __init__(self, root: str | Path):
         self.root = Path(root)
 
-    def save(self, data: bytes, suffix: str, name: str | None = None) -> str:
+    def save(self, data: bytes, suffix: str = "", name: str | None = None) -> str:
         """Store `data`. A given `name` (like "reports/<id>/report.pdf") is the uri and is
         overwritten on a second save, so a retried job leaves one file; otherwise a random name."""
         uri = name or f"{uuid.uuid4().hex}{suffix}"

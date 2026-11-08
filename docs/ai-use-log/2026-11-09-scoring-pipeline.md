@@ -7,7 +7,7 @@
   - the fixed four-criterion rubric (`app/scoring/rubric.py`, `samples/scoring/default.json`), a `description` field on `CriterionConfig`, `handled_cutoffs`, and new confidence weights;
   - code markers per trainee answer (`app/scoring/signals.py`), rule-based client-message validity (`app/scoring/validity.py`) and small text helpers (`app/scoring/text.py`);
   - `derive_handled` in `app/scoring/processor.py`;
-  - the pipeline (`app/scoring/pipeline.py`), the Celery tasks `run_assessment` and `render_report`, `enqueue_assessment` in `app/workers/dispatch.py` and the session-end hook;
+  - the pipeline (`app/scoring/pipeline.py`), the single Celery task `run_assessment` (score, then report), `enqueue_assessment` in `app/workers/dispatch.py` and the session-end hook;
   - the report no longer needs a scenario; named blob files with `exists`, and a fix for PDF rendering of table cells with several cited turns;
   - tests and the updated sample report and formulas doc.
 - **Model calls made:** none. The scoring model is a scripted `FakeLLM` everywhere.

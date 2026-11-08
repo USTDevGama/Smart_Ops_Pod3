@@ -5,11 +5,12 @@ from app.scoring.signals import (
     GROUNDED,
     SPECIFIC,
     AnswerInput,
+    Reference,
     answer_signals,
 )
 from app.scoring.text import content_words, flatten_text
 
-DOCS = (
+DOCS = Reference.from_text(
     "Backend engineer, three years of Java. Led a billing service rewrite. "
     "Warehouse picking dashboard: fixed price INR 18 lakh, go-live in 10 weeks."
 )
@@ -81,7 +82,9 @@ def test_admitting_a_limit_counts_as_grounded():
 
 
 def test_without_any_documents_nothing_is_grounded():
-    assert GROUNDED not in answer_signals(_answer("I'm not sure about that."), "")
+    assert GROUNDED not in answer_signals(
+        _answer("I'm not sure about that."), Reference.from_text("")
+    )
 
 
 def test_flatten_text_reads_nested_extracted_json():

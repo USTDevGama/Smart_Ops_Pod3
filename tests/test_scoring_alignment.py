@@ -16,11 +16,13 @@ from app.llm import FakeLLM
 from app.scoring.pipeline import (
     ASSESSMENT_FILE,
     AssessmentNotReadyError,
+    assess_and_render,
+    assess_session,
     blob_key,
     render_report,
     report_ready,
-    run_assessment,
 )
+from app.scoring.scorer import ScoringError
 from tests.agent_fixtures import STRONG, opening_json, turn_json
 from tests.conftest import ANNA, load_sample, publish_sample_settings, ready_demand, ready_profile
 
@@ -65,7 +67,7 @@ def test_ending_the_chat_queues_one_assessment_job_with_the_id_only(ended_chat):
 def test_the_job_scores_the_real_chat_and_saves_one_snapshot(ended_chat):
     api, session_id = ended_chat
     with api.factory() as db:
-        assessment = run_assessment(db, session_id, _scoring_llm(), api.store)
+        assessment = assess_session(db, session_id, _scoring_llm(), api.store)
 
     assert assessment.overall_score == pytest.approx(47.5)  # 0.5/0.7/0.4/0.2 at 25/30/25/20
     assert assessment.handled == "partly"  # 47.5 is between the 40 and 70 cutoffs
@@ -81,7 +83,7 @@ def test_the_job_scores_the_real_chat_and_saves_one_snapshot(ended_chat):
 def test_the_report_is_written_from_the_snapshot_and_needs_no_scenario(ended_chat):
     api, session_id = ended_chat
     with api.factory() as db:
-        run_assessment(db, session_id, _scoring_llm(), api.store)
+        assess_session(db, session_id, _scoring_llm(), api.store)
         assert not report_ready(api.store, session_id)
         render_report(db, session_id, api.store)
 
@@ -96,11 +98,45 @@ def test_the_report_is_written_from_the_snapshot_and_needs_no_scenario(ended_cha
 def test_running_the_job_twice_overwrites_instead_of_piling_up(ended_chat):
     api, session_id = ended_chat
     with api.factory() as db:
-        run_assessment(db, session_id, _scoring_llm(), api.store)
-        run_assessment(db, session_id, _scoring_llm(), api.store)
+        assess_session(db, session_id, _scoring_llm(), api.store)
+        assess_session(db, session_id, _scoring_llm(), api.store)
 
     files = [p for p in (api.store.root / "reports" / str(session_id)).iterdir()]
     assert [p.name for p in files] == [ASSESSMENT_FILE]
+
+
+def test_the_whole_job_writes_the_snapshot_and_all_report_files(ended_chat):
+    api, session_id = ended_chat
+    with api.factory() as db:
+        assess_and_render(db, session_id, _scoring_llm(), api.store)
+
+    names = sorted(p.name for p in (api.store.root / "reports" / str(session_id)).iterdir())
+    assert names == [ASSESSMENT_FILE, "report.html", "report.md", "report.pdf"]
+
+
+def test_a_retry_after_a_saved_score_renders_without_calling_the_model_again(ended_chat):
+    api, session_id = ended_chat
+    with api.factory() as db:
+        assess_session(db, session_id, _scoring_llm(), api.store)
+        silent = FakeLLM({})  # strict: any model call would raise
+
+        assess_and_render(db, session_id, silent, api.store)
+
+    assert silent.calls == []
+    assert report_ready(api.store, session_id)
+
+
+def test_a_failed_model_call_saves_nothing_and_a_retry_can_still_score(ended_chat):
+    api, session_id = ended_chat
+    with api.factory() as db:
+        with pytest.raises(ScoringError):
+            assess_session(db, session_id, FakeLLM({"score": ["not json", "still not json"]}),
+                           api.store)
+        assert not api.store.exists(blob_key(session_id, ASSESSMENT_FILE))
+
+        assess_and_render(db, session_id, _scoring_llm(), api.store)
+
+    assert report_ready(api.store, session_id)
 
 
 def test_rendering_before_scoring_is_refused(ended_chat):
@@ -116,7 +152,7 @@ def test_a_missing_resume_and_demand_still_scores_without_the_grounding_check(en
         session.profile_id = None
         session.demand_id = None
         db.commit()
-        assessment = run_assessment(db, session_id, _scoring_llm(), api.store)
+        assessment = assess_session(db, session_id, _scoring_llm(), api.store)
 
     snapshot = json.loads(api.store.read(blob_key(session_id, ASSESSMENT_FILE)))
     assert snapshot["grounding_documents_found"] is False

@@ -6,6 +6,7 @@ scoring model (see `app/scoring/prompts.py`); it sees each label and description
 """
 
 from app.schemas.config import ConfidenceConfig, CriterionConfig, ScoringConfig
+from app.scoring.signals import COMMITS, COMPOSED, GROUNDED, SPECIFIC
 
 RUBRIC_VERSION = "r2"
 
@@ -18,7 +19,7 @@ CRITERIA = (
             "Does not deflect, ramble, or repeat keywords without substance."
         ),
         weight=0.25,
-        signal_keys=["has_specifics"],
+        signal_keys=[SPECIFIC],
     ),
     CriterionConfig(
         id="C2",
@@ -29,7 +30,7 @@ CRITERIA = (
             "the pressure."
         ),
         weight=0.30,
-        signal_keys=["kept_composure"],
+        signal_keys=[COMPOSED],
     ),
     CriterionConfig(
         id="C3",
@@ -40,7 +41,7 @@ CRITERIA = (
             "not know."
         ),
         weight=0.25,
-        signal_keys=["grounded"],
+        signal_keys=[GROUNDED],
     ),
     CriterionConfig(
         id="C4",
@@ -50,7 +51,7 @@ CRITERIA = (
             "hold them to."
         ),
         weight=0.20,
-        signal_keys=["has_commitment"],
+        signal_keys=[COMMITS],
     ),
 )
 

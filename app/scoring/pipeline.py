@@ -1,12 +1,16 @@
 """After a session ends: score the chat, check it with code, and write the report.
 
-    run_assessment   transcript -> scoring model call -> signals and question validity (code)
-                     -> `build_assessment` -> assessment JSON in blob storage
-    render_report    reads that JSON -> Markdown, HTML and PDF in blob storage
+    assess_session      transcript -> code checks (markers, question validity) -> scoring model
+                        call -> `build_assessment` -> assessment JSON in blob storage
+    render_report       reads that JSON -> Markdown, HTML and PDF in blob storage
+    assess_and_render   both, in order. This is what the one Celery task (`run_assessment` in
+                        `app/workers/tasks.py`) runs. If the assessment JSON is already saved, a
+                        retry skips the model call and only renders, so a failure while writing
+                        the PDF can never change a score that was already saved.
 
-The two steps are separate Celery tasks (see `app/workers/tasks.py`). Every file has a fixed name
-under `reports/<session_id>/`, so a retried or repeated task overwrites its own files and the
-stored JSON is the one snapshot of the score. Nothing here keeps conversation text in logs.
+Every file has a fixed name under `reports/<session_id>/`, so a retried or repeated job overwrites
+its own files and the stored JSON is the one snapshot of the score. Nothing here keeps
+conversation text in logs.
 """
 
 import json
@@ -46,63 +50,73 @@ def blob_key(session_id: UUID | str, filename: str) -> str:
     return f"reports/{session_id}/{filename}"
 
 
-def run_assessment_in_new_session(session_id: UUID) -> None:
-    with Session(get_engine()) as db:
-        run_assessment(db, session_id, get_llm_client(), get_blob_store())
-
-
-def render_report_in_new_session(session_id: UUID) -> None:
-    with Session(get_engine()) as db:
-        render_report(db, session_id, get_blob_store())
+def assess_and_render(
+    db: Session,
+    session_id: UUID,
+    llm: LLMClient,
+    store: BlobStore,
+    config: ScoringConfig | None = None,
+) -> ReportArtifacts:
+    """Score (unless a snapshot is already saved), then write the report files."""
+    if store.exists(blob_key(session_id, ASSESSMENT_FILE)):
+        log.info("assessment already saved for session %s; rendering only", session_id)
+    else:
+        assess_session(db, session_id, llm, store, config)
+    return render_report(db, session_id, store)
 
 
 def assess_and_render_in_new_session(session_id: UUID) -> None:
-    run_assessment_in_new_session(session_id)
-    render_report_in_new_session(session_id)
+    with Session(get_engine()) as db:
+        assess_and_render(db, session_id, get_llm_client(), get_blob_store())
 
 
 def report_ready(store: BlobStore, session_id: UUID | str) -> bool:
     return store.exists(blob_key(session_id, REPORT_FILES["pdf"]))
 
 
-def run_assessment(
+def assess_session(
     db: Session,
     session_id: UUID,
     llm: LLMClient,
     store: BlobStore,
     config: ScoringConfig | None = None,
 ) -> Assessment:
+    """Score one ended session and save the snapshot. The model is called last, after every
+    check that needs only our own data, so a bad row fails before any model cost."""
     config = config or default_scoring_config()
     session = db.get(m.RoleplaySession, session_id)
     if session is None:
         raise AssessmentNotReadyError(f"session {session_id} was not found")
     if session.status != SessionStatus.ENDED:
         raise AssessmentNotReadyError("a session must be ended before it is scored")
+    persona_row = db.get(m.ConfigVersion, session.persona_version_id)
+    if persona_row is None:
+        raise AssessmentNotReadyError("the session's pinned persona version is missing")
+    persona = PersonaConfig.model_validate(persona_row.config)
 
     rows = list(
         db.scalars(select(m.Turn).where(m.Turn.session_id == session.id).order_by(m.Turn.idx))
     )
     transcript = build_transcript(rows)
-    persona_row = db.get(m.ConfigVersion, session.persona_version_id)
-    persona = PersonaConfig.model_validate(persona_row.config)
-
     documents = _document_text(db, session)
-    reference = "\n".join(part for part in [documents, *persona.main_concerns] if part)
-    effective = config if documents else _without_signal(config, GROUNDED)
-
-    output = score_session(llm, prompt_config(config), transcript)
-
     answers, clients = _exchanges(rows)
     signals = trainee_signals(answers, documents)
-    validity = question_validity(clients, persona.max_step, reference)
+    validity = question_validity(
+        clients, persona.max_step, "\n".join([documents, *persona.main_concerns])
+    )
     validation = ScoringValidationContext(
         client_exchange_numbers=transcript.client_numbers,
         trainee_exchange_numbers=transcript.trainee_numbers,
         question_validity=validity,
         trainee_signals=signals,
     )
+
+    output = score_session(llm, prompt_config(config), transcript)
     assessment = build_assessment(
-        output, effective, validation, handled=derive_handled(output, config)
+        output,
+        config if documents else _without_signal(config, GROUNDED),
+        validation,
+        handled=derive_handled(output, config),
     )
 
     snapshot = {
@@ -114,11 +128,7 @@ def run_assessment(
         "question_validity": {str(n): ok for n, ok in validity.items()},
         "grounding_documents_found": bool(documents),
     }
-    store.save(
-        json.dumps(snapshot, indent=2).encode(),
-        ".json",
-        name=blob_key(session.id, ASSESSMENT_FILE),
-    )
+    store.save(json.dumps(snapshot, indent=2).encode(), name=blob_key(session.id, ASSESSMENT_FILE))
     log.info("assessment saved for session %s", session.id)
     return assessment
 
@@ -127,8 +137,7 @@ def render_report(db: Session, session_id: UUID, store: BlobStore) -> ReportArti
     key = blob_key(session_id, ASSESSMENT_FILE)
     if not store.exists(key):
         raise AssessmentNotReadyError("the assessment has not been saved for this session")
-    snapshot = json.loads(store.read(key))
-    assessment = Assessment.model_validate(snapshot["assessment"])
+    assessment = Assessment.model_validate(json.loads(store.read(key))["assessment"])
 
     artifacts = generate_report(db, session_id, assessment)
     contents = {
@@ -137,7 +146,7 @@ def render_report(db: Session, session_id: UUID, store: BlobStore) -> ReportArti
         "pdf": artifacts.pdf,
     }
     for kind, filename in REPORT_FILES.items():
-        store.save(contents[kind], "", name=blob_key(session_id, filename))
+        store.save(contents[kind], name=blob_key(session_id, filename))
     log.info("report saved for session %s", session_id)
     return artifacts
 

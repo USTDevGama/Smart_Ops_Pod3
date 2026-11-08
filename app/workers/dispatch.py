@@ -33,9 +33,9 @@ def enqueue_demand_ingest(demand_id: UUID) -> None:
 
 
 def enqueue_assessment(session_id: UUID) -> None:
-    """Queue `run_assessment` (ID only); it queues `render_report` when it finishes.
+    """Queue `run_assessment` (ID only): it scores the chat and writes the report files.
 
-    With PODC_INGEST_INLINE=true both run right here. The chat has already ended, so a failure to
+    With PODC_INGEST_INLINE=true it runs right here. The chat has already ended, so a failure to
     score or to queue is logged and never raised back into the request.
     """
     try:

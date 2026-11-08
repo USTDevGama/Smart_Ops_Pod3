@@ -68,7 +68,22 @@ class AnswerInput:
     evaluation: Evaluation | None
 
 
-def answer_signals(answer: AnswerInput, reference_text: str) -> set[str]:
+@dataclass(frozen=True)
+class Reference:
+    """The resume and demand text, read once per session instead of once per answer."""
+
+    words: frozenset[str]
+    figures: frozenset[str]
+
+    @classmethod
+    def from_text(cls, text: str) -> "Reference":
+        return cls(frozenset(content_words(text)), frozenset(_figures(text)))
+
+    def __bool__(self) -> bool:
+        return bool(self.words or self.figures)
+
+
+def answer_signals(answer: AnswerInput, reference: Reference) -> set[str]:
     signals: set[str] = set()
     evaluation = answer.evaluation
     text = answer.text
@@ -87,7 +102,7 @@ def answer_signals(answer: AnswerInput, reference_text: str) -> set[str]:
     ):
         signals.add(COMPOSED)
 
-    if reference_text and _grounded(answer, reference_text):
+    if reference and _grounded(answer, reference):
         signals.add(GROUNDED)
 
     if _COMMITMENT.search(text) and (evaluation is None or not evaluation.evasive):
@@ -97,16 +112,17 @@ def answer_signals(answer: AnswerInput, reference_text: str) -> set[str]:
 
 
 def trainee_signals(answers: list[AnswerInput], reference_text: str) -> dict[int, set[str]]:
-    return {answer.number: answer_signals(answer, reference_text) for answer in answers}
+    reference = Reference.from_text(reference_text)
+    return {answer.number: answer_signals(answer, reference) for answer in answers}
 
 
-def _grounded(answer: AnswerInput, reference_text: str) -> bool:
-    known = _figures(reference_text) | _figures(answer.client_text)
+def _grounded(answer: AnswerInput, reference: Reference) -> bool:
+    known = reference.figures | _figures(answer.client_text)
     for sentence in _SENTENCE_END.split(answer.text):
         if _EXPERIENCE_CUE.search(sentence) and _figures(sentence) - known:
             return False  # an experience claim with a figure nobody gave us
 
-    shared = content_words(answer.text) & content_words(reference_text)
+    shared = content_words(answer.text) & reference.words
     return len(shared) >= MIN_SHARED_WORDS or bool(_ADMITS_LIMIT.search(answer.text))
 
 

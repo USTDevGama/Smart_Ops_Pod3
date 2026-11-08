@@ -2,7 +2,7 @@
 
 import re
 
-_WORD = re.compile(r"[a-z][a-z'-]{3,}")
+_WORD = re.compile(r"[a-z][a-z'-]{4,}")
 
 
 def flatten_text(value: object) -> str:
@@ -20,4 +20,4 @@ def flatten_text(value: object) -> str:
 
 def content_words(text: str) -> set[str]:
     """Lowercase words of five or more letters: long enough to carry meaning, short to compare."""
-    return {word for word in _WORD.findall(text.lower()) if len(word) >= 5}
+    return set(_WORD.findall(text.lower()))
