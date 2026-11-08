@@ -112,7 +112,7 @@ Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers
 ## 5. Still to do
 - The real ingest and the real turn engine (both behind the interfaces above).
 - Persist the scenario selected by the agent and validation metadata for each client question so scoring confidence can use it.
-- Wire the scoring processor and report renderer into background jobs and APIs; implement review and the Pod D feed. The report renderer consumes validated assessment data plus session/configuration rows; persistence and review-state storage must be designed only if required, without assuming dedicated tables.
+- Scoring and the report now run as background jobs after a session ends (`run_assessment`, then `render_report`) and save `reports/<session_id>/assessment.json` and the report files to blob storage; there is no assessment table. Still to do: the API endpoints that serve them, the review workflow and the Pod D feed. Persistence and review-state storage must be designed only if required, without assuming dedicated tables.
 - Background-job retries, the schedule for the stuck-job sweeper, and the 30-day deletion job.
 - The real LLM provider once API keys arrive.
 - Sandbox test chat for admins; word-by-word reply streaming.
