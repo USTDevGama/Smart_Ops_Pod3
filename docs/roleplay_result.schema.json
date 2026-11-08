@@ -77,7 +77,7 @@
       "type": "object"
     }
   },
-  "description": "Outgoing Pod D contract, distinct from the raw scoring LLM response.",
+  "description": "Outgoing Pod D contract, distinct from the internal criterion-scoring output.",
   "properties": {
     "contract": {
       "const": "roleplay-result",

@@ -8,7 +8,7 @@ from app.config import get_settings
 def enqueue_profile_ingest(profile_id: UUID) -> None:
     """Queue `ingest_profile` (IDs only). With PODC_INGEST_INLINE=true, run it right here."""
     if get_settings().ingest_inline:
-        from app.ingest.placeholder import ingest_profile_in_new_session
+        from app.ingest.pipeline import ingest_profile_in_new_session
 
         ingest_profile_in_new_session(profile_id)
         return
@@ -20,7 +20,7 @@ def enqueue_profile_ingest(profile_id: UUID) -> None:
 def enqueue_demand_ingest(demand_id: UUID) -> None:
     """Queue `ingest_demand` (IDs only). With PODC_INGEST_INLINE=true, run it right here."""
     if get_settings().ingest_inline:
-        from app.ingest.placeholder import ingest_demand_in_new_session
+        from app.ingest.pipeline import ingest_demand_in_new_session
 
         ingest_demand_in_new_session(demand_id)
         return

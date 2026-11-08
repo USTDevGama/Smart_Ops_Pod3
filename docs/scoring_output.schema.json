@@ -83,7 +83,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "The scoring LLM response, matching samples/results/llm_output.json.",
+  "description": "Final criterion-level output supplied by the conversation-agent component.",
   "properties": {
     "criteria": {
       "items": {

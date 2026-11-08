@@ -44,7 +44,7 @@ class ScoringNote(BaseModel):
 
 
 class ScoringOutput(BaseModel):
-    """The scoring LLM response, matching samples/results/llm_output.json."""
+    """Final criterion-level output supplied by the conversation-agent component."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -120,7 +120,7 @@ class ResultBody(BaseModel):
 
 
 class RoleplayResult(BaseModel):
-    """Outgoing Pod D contract, distinct from the raw scoring LLM response."""
+    """Outgoing Pod D contract, distinct from the internal criterion-scoring output."""
 
     contract: Literal["roleplay-result"] = "roleplay-result"
     session_id: str

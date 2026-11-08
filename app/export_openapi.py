@@ -1,7 +1,8 @@
 """Regenerate the generated docs: `python -m app.export_openapi`.
 
 Writes docs/openapi.yaml (the API), docs/roleplay_result.schema.json (the outgoing Pod D
-contract), and docs/scoring_output.schema.json (the raw scoring LLM response).
+contract), and docs/scoring_output.schema.json (the expected final criterion-level output from
+the conversation-agent component).
 """
 
 import json
