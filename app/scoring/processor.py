@@ -36,6 +36,19 @@ class ScoringValidationContext(BaseModel):
         return self
 
 
+def derive_handled(
+    scoring_output: ScoringOutput, config: ScoringConfig
+) -> Literal["yes", "partly", "no"]:
+    """Whether the client's concern was handled, from the weighted score and the config cutoffs."""
+    weights = {criterion.id: criterion.weight for criterion in config.criteria}
+    score = sum(item.points * weights[item.id] for item in scoring_output.criteria)
+    if score >= config.handled_cutoffs.yes:
+        return "yes"
+    if score >= config.handled_cutoffs.partly:
+        return "partly"
+    return "no"
+
+
 def build_assessment(
     scoring_output: ScoringOutput,
     config: ScoringConfig,

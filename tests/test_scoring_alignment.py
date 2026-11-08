@@ -1,24 +1,26 @@
 """A real chat (agent engine + chat service) flowing through scoring and into the report.
 
-The agent's saved rows go in at one end; Disha's `load_report_data` is the other end. The scoring
-model is scripted with her sample output. Everything here is made up: the repo is public.
+The agent's saved rows go in at one end; the assessment job and the report are the other end. The
+scoring model is scripted with the sample output. Everything here is made up: the repo is public.
 """
 
+import json
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
 
 from app.api.deps import get_llm
 from app.db import models as m
 from app.llm import FakeLLM
-from app.reports.generator import ReportDataError, load_report_data, render_markdown
-from app.schemas import ScoringConfig
-from app.schemas.enums import ConfigKind
-from app.scoring import ScoringValidationContext, build_assessment
-from app.scoring.scorer import score_session
-from app.scoring.transcript import build_transcript
+from app.scoring.pipeline import (
+    ASSESSMENT_FILE,
+    AssessmentNotReadyError,
+    blob_key,
+    render_report,
+    report_ready,
+    run_assessment,
+)
 from tests.agent_fixtures import STRONG, opening_json, turn_json
 from tests.conftest import ANNA, load_sample, publish_sample_settings, ready_demand, ready_profile
 
@@ -50,62 +52,74 @@ def ended_chat(api, monkeypatch):
     return api, UUID(session_id)
 
 
-def _score(db, session_id):
-    rows = list(
-        db.scalars(select(m.Turn).where(m.Turn.session_id == session_id).order_by(m.Turn.idx))
-    )
-    transcript = build_transcript(rows)
-    config = ScoringConfig.model_validate(load_sample("scoring/default.json"))
-    llm = FakeLLM({"score": [load_sample("results/llm_output.json")]})
-    output = score_session(llm, config, transcript)
-    validation = ScoringValidationContext(
-        client_exchange_numbers=transcript.client_numbers,
-        trainee_exchange_numbers=transcript.trainee_numbers,
-        question_validity=dict.fromkeys(transcript.client_numbers, True),
-        trainee_signals={n: set() for n in transcript.trainee_numbers},
-    )
-    return transcript, build_assessment(output, config, validation, handled="partly")
+def _scoring_llm() -> FakeLLM:
+    return FakeLLM({"score": [load_sample("results/llm_output.json")]})
 
 
-def test_saved_rows_become_the_exchanges_the_scorer_and_the_validation_context_expect(ended_chat):
+def test_ending_the_chat_queues_one_assessment_job_with_the_id_only(ended_chat):
+    api, session_id = ended_chat
+
+    assert api.queued_assessment == [session_id]
+
+
+def test_the_job_scores_the_real_chat_and_saves_one_snapshot(ended_chat):
     api, session_id = ended_chat
     with api.factory() as db:
-        transcript, assessment = _score(db, session_id)
+        assessment = run_assessment(db, session_id, _scoring_llm(), api.store)
 
-    assert transcript.trainee_numbers == {1, 2, 3, 4}
-    assert transcript.client_numbers == {1, 2, 3, 4, 5}  # the last client message is unanswered
-    assert len(assessment.criteria) == 4
+    assert assessment.overall_score == pytest.approx(47.5)  # 0.5/0.7/0.4/0.2 at 25/30/25/20
+    assert assessment.handled == "partly"  # 47.5 is between the 40 and 70 cutoffs
+    assert [c.id for c in assessment.criteria] == ["C1", "C2", "C3", "C4"]
+
+    snapshot = json.loads(api.store.read(blob_key(session_id, ASSESSMENT_FILE)))
+    assert snapshot["scoring_output"]["criteria"][0]["id"] == "C1"  # what the model said
+    assert set(snapshot["signals"]) == {"1", "2", "3", "4"}  # one entry per trainee answer
+    assert set(snapshot["question_validity"]) == {"1", "2", "3", "4", "5"}
+    assert snapshot["grounding_documents_found"] is True
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ReportDataError,
-    reason="the agent chooses the scenario but nothing saves it: session.scenario_version_id is "
-    "empty, and the report needs it for scenario_id and title (see docs/agent-architecture.md)",
-)
-def test_the_report_loads_for_a_session_made_by_the_real_chat_path(ended_chat):
+def test_the_report_is_written_from_the_snapshot_and_needs_no_scenario(ended_chat):
     api, session_id = ended_chat
     with api.factory() as db:
-        _, assessment = _score(db, session_id)
-        data = load_report_data(db, session_id, assessment)
+        run_assessment(db, session_id, _scoring_llm(), api.store)
+        assert not report_ready(api.store, session_id)
+        render_report(db, session_id, api.store)
 
-    assert "VD-01" in render_markdown(data)
+    assert report_ready(api.store, session_id)
+    markdown = api.store.read(blob_key(session_id, "report.md")).decode()
+    assert "Overall score: **47.5 / 100**" in markdown
+    assert "Scenario" not in markdown
+    assert "### Turn 5" in markdown  # the unanswered last client message is in the transcript
+    assert api.store.read(blob_key(session_id, "report.pdf")).startswith(b"%PDF-")
 
 
-def test_everything_else_in_the_report_loader_accepts_the_agents_rows(ended_chat):
-    """Same session, but with the scenario saved by hand: the only thing the chat path lacks."""
+def test_running_the_job_twice_overwrites_instead_of_piling_up(ended_chat):
     api, session_id = ended_chat
     with api.factory() as db:
-        scenario = db.scalars(
-            select(m.ConfigVersion).where(m.ConfigVersion.kind == ConfigKind.SCENARIO)
-        ).one()
-        db.get(m.RoleplaySession, session_id).scenario_version_id = scenario.id
+        run_assessment(db, session_id, _scoring_llm(), api.store)
+        run_assessment(db, session_id, _scoring_llm(), api.store)
+
+    files = [p for p in (api.store.root / "reports" / str(session_id)).iterdir()]
+    assert [p.name for p in files] == [ASSESSMENT_FILE]
+
+
+def test_rendering_before_scoring_is_refused(ended_chat):
+    api, session_id = ended_chat
+    with api.factory() as db, pytest.raises(AssessmentNotReadyError, match="not been saved"):
+        render_report(db, session_id, api.store)
+
+
+def test_a_missing_resume_and_demand_still_scores_without_the_grounding_check(ended_chat):
+    api, session_id = ended_chat
+    with api.factory() as db:
+        session = db.get(m.RoleplaySession, session_id)
+        session.profile_id = None
+        session.demand_id = None
         db.commit()
-        _, assessment = _score(db, session_id)
-        data = load_report_data(db, session_id, assessment)
-        markdown = render_markdown(data)
+        assessment = run_assessment(db, session_id, _scoring_llm(), api.store)
 
-    assert data.scenario_id == "VD-01"
-    assert data.escalation_peak == 1  # the scripted client stayed at level 1
-    assert [e.turn for e in data.transcript] == [1, 2, 3, 4, 5]
-    assert "Scenario: VD-01" in markdown and "### Turn 5" in markdown
+    snapshot = json.loads(api.store.read(blob_key(session_id, ASSESSMENT_FILE)))
+    assert snapshot["grounding_documents_found"] is False
+    assert assessment.overall_score == pytest.approx(47.5)
+
+

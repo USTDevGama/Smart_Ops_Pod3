@@ -1,25 +1,24 @@
 # Stakeholder Roleplay Assessment
 
-Scenario: SC-01 - Delivery slipping
-Session: sess-C-0001 | Persona: strict-1.0 | Rubric: r1
+Session: sess-C-0001 | Persona: strict-1.0 | Rubric: r2
 Ended: objections exhausted | Date: 03 Nov 2026
 
 ## Result
 
-- Overall score: **45.0 / 100**
+- Overall score: **47.5 / 100**
 - Handled: **partly**
 - Escalation peak: **2 of 4**
 - Admin review: **required**
-- Confidence score: 30
+- Confidence score: 82
 
 ## Score breakdown
 
 | ID | Criterion | Weight | Status | Points | Confidence | Evidence |
 |---|---|---|---|---|---|---|
-| C1 | owns the delay | 25% | partly | 0.5 | 34 | Turn 4 (+): Owns the late notice but not the delay itself. |
-| C2 | gives a specific revised date with reason | 25% | met | 0.7 | 40 | Turn 2 (-), Turn 3 (+): Firm date with a reason, after hedging in turn 2. |
-| C3 | states the cost impact | 25% | partly | 0.4 | 20 | Turn 3 (+): Cost given as effort only; no money figure or who pays. |
-| C4 | offers a way to prevent repeat | 25% | partly | 0.2 | 15 | Turn 4 (+): Offers reporting, not a way to stop another delay. |
+| C1 | Answers directly and specifically | 25% | partly | 0.5 | 100 | Turn 4 (+): Owns the late notice but not the delay itself. |
+| C2 | Holds up under pressure | 30% | met | 0.7 | 40 | Turn 2 (-), Turn 3 (+): Firm date with a reason, after hedging in turn 2. |
+| C3 | Credible and consistent | 25% | partly | 0.4 | 100 | Turn 3 (+): Cost given as effort only; no money figure or who pays. |
+| C4 | Takes ownership and offers a next step | 20% | not_met | 0.2 | 100 | Turn 4 (+): Offers reporting, not a way to stop another delay. |
 
 ## Strengths
 

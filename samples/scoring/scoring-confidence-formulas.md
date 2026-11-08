@@ -1,27 +1,35 @@
 # Scoring and confidence formulas
 
-This document records the current scoring contract and the proposed confidence
-heuristic. Confidence parameters are starting values, not calibrated or approved
-production thresholds.
+The score and the confidence are two separate numbers. The score says how well the trainee did.
+The confidence says how much a human should double-check that score. Confidence never changes the
+score. Confidence parameters are starting values, not calibrated or approved production
+thresholds.
+
+## The rubric (fixed, rubric version `r2`)
+
+Four criteria apply to every scenario. They are defined in `app/scoring/rubric.py` and mirrored in
+`samples/scoring/default.json` (a test keeps the two equal). The scoring model sees each
+criterion's id, label and description. It never sees weights, cutoffs or signal keys.
+
+| ID | Criterion | Weight |
+|---|---|---:|
+| C1 | Answers directly and specifically | 25% |
+| C2 | Holds up under pressure | 30% |
+| C3 | Credible and consistent | 25% |
+| C4 | Takes ownership and offers a next step | 20% |
 
 ## Overall score
 
-Each criterion has:
-
-- `points` in the range 0 to 1.
-- A `weight` in the range 0 to 1.
-
-Criterion weights must sum to 1. The overall score is:
+Each criterion has `points` from the scoring model (0 to 1) and a `weight`. Weights sum to 1.
 
 ```text
 overall_score = 100 * sum(points_i * weight_i)
 ```
 
-For four equally weighted criteria with points `0.5`, `0.7`, `0.4`, and `0.2`,
-the score is `45.0 / 100`.
+Sample (`results/llm_output.json`, points 0.5 / 0.7 / 0.4 / 0.2):
+`100 * (0.5*0.25 + 0.7*0.30 + 0.4*0.25 + 0.2*0.20) = 47.5`.
 
-The points-to-status cutoffs below are proposed defaults and still need
-confirmation:
+## Status and `handled`
 
 | Status | Criterion points |
 |---|---:|
@@ -29,79 +37,56 @@ confirmation:
 | `partly` | 0.30 to less than 0.70 |
 | `met` | 0.70 or greater |
 
-These rules make the boundary values explicit: `0.30` is `partly`, and `0.70`
-is `met`. The overall `handled` label is separate and needs its own agreed
-mapping if it is derived from the overall score.
-
-The sample report marks criterion C4 with `0.2` points as `partly`, which does
-not match the proposed `0.30` lower cutoff. Until the rubric thresholds are
-confirmed, the report sample fixes the output shape, while its example status
-values and the default cutoffs remain illustrative.
-
-The confidence values in that report are also illustrative rather than expected
-outputs of this formula. With `llm_output.json`, the default rubric, and valid
-questions/signals for all cited turns, the proposed formula yields criterion
-confidence values `100`, `75`, `100`, and `100`, for a combined score of `93.75`
-before rounding.
+`handled` is derived from the overall score (as 0 to 1) with `handled_cutoffs`:
+`yes` at 0.70 or more, `partly` at 0.40 or more, otherwise `no`. The sample's 47.5 is `partly`.
 
 ## Per-criterion confidence
 
-Confidence is a review-priority heuristic from 0 to 100. It is not a
-probability that a score is correct.
-
-For criterion `i`:
+A review-priority heuristic from 0 to 100. It is not a probability that a score is correct.
 
 ```text
-confidence_i = 100 * (0.40 * G_i + 0.35 * Q_i + 0.25 * M_i)
+confidence_i = 100 * (0.40 * G_i + 0.20 * Q_i + 0.40 * M_i)
 ```
 
-The weights are provisional.
-
-| Term | Meaning | Proposed calculation |
+| Term | Meaning | Calculation |
 |---|---|---|
-| `G_i` | Evidence agrees with code-observed signals | Share of cited trainee turns where the criterion's signal agrees with the evidence polarity. |
-| `Q_i` | Questions behind the evidence were valid | Share of cited exchanges whose client question passed the validity checks. |
-| `M_i` | Criterion status is away from a cutoff | `min(1, d / 0.10)`, where `d` is the distance from the points to the nearest status cutoff. |
+| `G_i` | The model's evidence agrees with the code markers | Share of cited trainee exchanges where the criterion's marker agrees with the evidence polarity (marker present for `positive`, absent for `negative`). |
+| `Q_i` | The client questions behind the evidence were valid | Share of cited exchanges whose client message passed the validity rules. |
+| `M_i` | The status is away from a cutoff | `min(1, d / 0.10)`, where `d` is the distance from the points to the nearest status cutoff. |
 
-Question validity checks are: grounded in the scenario or cited proposal segments,
-in persona, and consistent with the escalation rules. A proposal reference must
-exist; its existence alone does not establish relevance.
+If points are above zero but nothing is cited, confidence is zero. If a criterion has no marker,
+`G_i` is dropped and the other weights are renormalised (`(0.20*Q + 0.40*M) / 0.60`). That
+happens for C3's `grounded` marker when the session has no resume and no demand document, because
+nothing could be compared.
 
-### Evidence and missing-signal rules
+### Code markers (`app/scoring/signals.py`)
 
-- If points are above zero but there are no valid cited trainee turns, criterion
-  confidence is zero.
-- If points are zero and there are no citations, `G_i` is one only when no
-  matching signal fired on any trainee turn. `Q_i` is the average validity of
-  the session's client questions.
-- If a criterion has no matching code signal, omit `G_i` and renormalize the
-  remaining confidence weights: `confidence_i = 100 * (0.35 * Q_i + 0.25 * M_i) / 0.60`.
-- Evidence citations must identify trainee answers. The report's logical turn
-  is an exchange: one client question and its trainee reply share the same turn
-  number. Database message rows remain distinct and must be mapped to that
-  exchange number.
+Set per trainee answer from its text, the evaluation the agent saved for it (`answer_quality`,
+`evasive`, `composure`) and the resume and demand text. Cheap text rules: a missed marker lowers
+confidence, it does not say the answer was bad.
 
-The `0.10` margin is also provisional. With the proposed cutoffs, confidence
-margin is zero exactly at `0.30` or `0.70`, and reaches one at least `0.10` away
-from the nearest cutoff.
+| Marker | Criterion | Set when |
+|---|---|---|
+| `has_specifics` | C1 | a figure or date, not evasive, answer quality at least 0.5 |
+| `kept_composure` | C2 | composure at least 0.6 and no over-promising words |
+| `grounded` | C3 | no experience claim with a figure found in neither the documents nor the client's message, and the answer shares words with the documents or admits a limit |
+| `has_commitment` | C4 | a first-person commitment or ownership phrase, not evasive |
+
+### Question validity (`app/scoring/validity.py`)
+
+A client message is valid when it has a saved escalation level inside the persona's ladder, the
+level moved by at most one step, it is not a near-copy of an earlier client message, and it
+shares a meaningful word with the persona's concerns, the demand or the resume. These are shallow
+rules, which is why `Q_i` has the smallest weight.
 
 ## Session confidence
 
-Let `w_i` be the criterion weights and `N_invalid` the number of invalid client
-questions:
-
 ```text
 base_confidence = sum(w_i * confidence_i)
-session_confidence = clamp(base_confidence - 10 * N_invalid, 0, 100)
+session_confidence = clamp(base_confidence - 5 * N_invalid, 0, 100)
 ```
 
-For sessions with fewer than three trainee exchanges, cap the result at 60:
-
-```text
-session_confidence = min(session_confidence, 60)
-```
-
-The deduction, short-session cap, and confidence bands are provisional:
+For sessions with fewer than three trainee exchanges, the result is capped at 60.
 
 | Band | Session confidence |
 |---|---:|
@@ -109,22 +94,13 @@ The deduction, short-session cap, and confidence bands are provisional:
 | `medium` | 50 to less than 75 |
 | `low` | less than 50 |
 
-The validity deduction applies at the session level because an invalid client
-question can affect the whole conversation, including turns not cited by a
-criterion.
+Sample (all questions valid, markers only on turns 3 and 4): criterion confidences 100 / 40 / 100
+/ 100, session confidence 82. C2 is low because its model evidence cites turn 3 as positive while
+no composure marker fired there, and because 0.7 sits exactly on the `met` cutoff.
 
-## Decisions and items to confirm
+## Still provisional
 
-- **Scoring formula:** weighted criterion points, multiplied by 100.
-- **Point range and weights:** points are 0 to 1; criterion weights sum to 1.
-- **Turn meaning for this report:** a client question and its trainee reply are
-  one logical turn and share a turn number.
-- **Still provisional:** status cutoffs, confidence component weights, the
-  `0.10` margin, the 10-point invalid-question deduction, the short-session
-  cap, and confidence bands. In particular, reconcile the C4 status in the
-  report sample with the proposed `0.30` lower cutoff.
-- **Needs scenario-specific definitions and testing:** code signals per
-  criterion, polarity semantics, and question-validity checks.
-
-Tune the provisional values against representative seed cases and human
-assessments before treating confidence bands as operational thresholds.
+Status cutoffs, `handled` cutoffs, confidence weights, the 0.10 margin, the 5-point deduction,
+the short-session cap and the bands are untuned guesses. Tune them against representative seed
+cases and human assessments before treating the bands as operational thresholds. Marker and
+validity rules need the same check.

@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from app.schemas import ScoringConfig, ScoringOutput
 from app.scoring import ScoringValidationContext, build_assessment
+from app.scoring.processor import derive_handled
 from tests.conftest import load_sample
 
 
@@ -16,8 +17,8 @@ def _inputs():
         trainee_signals={
             1: set(),
             2: set(),
-            3: {"has_date", "has_cost"},
-            4: {"has_ownership", "has_commitment"},
+            3: {"has_specifics", "kept_composure", "grounded"},
+            4: {"has_specifics", "has_commitment"},
         },
     )
     return output, config, validation
@@ -28,11 +29,12 @@ def test_clean_sample_scores_and_confidence_match_the_formula_example():
 
     assessment = build_assessment(output, config, validation, handled="partly")
 
-    assert assessment.overall_score == pytest.approx(45.0)
+    # 100 * (0.5*0.25 + 0.7*0.30 + 0.4*0.25 + 0.2*0.20)
+    assert assessment.overall_score == pytest.approx(47.5)
     assert [item.confidence for item in assessment.criteria] == pytest.approx(
-        [100, 75, 100, 100]
+        [100, 60, 100, 100]  # C2 sits exactly on the "met" cutoff, so its margin term is 0
     )
-    assert assessment.confidence_score == pytest.approx(93.75)
+    assert assessment.confidence_score == pytest.approx(88)
     assert [item.status for item in assessment.criteria] == [
         "partly",
         "met",
@@ -47,10 +49,10 @@ def test_invalid_client_question_reduces_confidence_not_score():
 
     assessment = build_assessment(output, config, validation, handled="partly")
 
-    assert assessment.overall_score == pytest.approx(45.0)
-    assert assessment.criteria[1].confidence == pytest.approx(57.5)
-    assert assessment.criteria[2].confidence == pytest.approx(65)
-    assert assessment.confidence_score == pytest.approx(70.625)
+    assert assessment.overall_score == pytest.approx(47.5)
+    assert assessment.criteria[1].confidence == pytest.approx(50)
+    assert assessment.criteria[2].confidence == pytest.approx(80)
+    assert assessment.confidence_score == pytest.approx(75)  # 80 base minus the 5-point penalty
 
 
 def test_bad_signal_agreement_only_reduces_its_criterion_confidence():
@@ -61,9 +63,9 @@ def test_bad_signal_agreement_only_reduces_its_criterion_confidence():
 
     assessment = build_assessment(output, config, validation, handled="partly")
 
-    assert assessment.overall_score == pytest.approx(45.0)
+    assert assessment.overall_score == pytest.approx(47.5)
     assert assessment.criteria[2].confidence == pytest.approx(60)
-    assert assessment.confidence_score == pytest.approx(83.75)
+    assert assessment.confidence_score == pytest.approx(78)
 
 
 def test_invalid_evidence_turn_is_rejected_before_report_generation():
@@ -87,7 +89,7 @@ def test_short_session_confidence_is_capped():
         trainee_exchange_numbers={1, 2},
         question_validity={1: True, 2: True, 3: True},
         trainee_signals={
-            1: {"has_ownership", "has_date", "has_cost", "has_commitment"},
+            1: {"has_specifics", "kept_composure", "grounded", "has_commitment"},
             2: set(),
         },
     )
@@ -95,6 +97,26 @@ def test_short_session_confidence_is_capped():
     assessment = build_assessment(output, config, validation, handled="partly")
 
     assert assessment.confidence_score == pytest.approx(60)
+
+
+@pytest.mark.parametrize(
+    ("points", "expected"),
+    [
+        ([1, 1, 1, 1], "yes"),
+        ([0.7, 0.7, 0.7, 0.7], "yes"),  # on the cutoff counts as reached
+        ([0.5, 0.5, 0.5, 0.5], "partly"),
+        ([0.4, 0.4, 0.4, 0.4], "partly"),
+        ([0.2, 0.2, 0.2, 0.2], "no"),
+    ],
+)
+def test_handled_follows_the_weighted_score(points, expected):
+    output, config, _ = _inputs()
+    data = output.model_dump(mode="python")
+    for criterion, value in zip(data["criteria"], points, strict=True):
+        criterion["points"] = value
+    output = ScoringOutput.model_validate(data)
+
+    assert derive_handled(output, config) == expected
 
 
 def test_context_requires_signal_turns_to_map_to_client_questions():

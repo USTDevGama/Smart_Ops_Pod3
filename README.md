@@ -23,8 +23,8 @@ Pod C's agent for the Multi-Agent Training Evaluation Platform ("The Tough Clien
 1. **Setup.** An admin configures a **persona** (who the client is, its rules and escalation ladder), uploads the shared **demand** document, and imports the scenario dataset in bulk. The agent selects a scenario for the trainee's profile.
 2. **Profile.** A trainee uploads their resume (PDF, DOCX or TXT). The ingestion pipeline stores extracted content as JSON. The client uses the profile together with the shared demand and selected scenario.
 3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit or when someone ends it.
-4. **The mark.** A scoring model call rates the trainee on weighted criteria and cites real exchanges. Plain code validates the output, applies weights and status cutoffs, and computes confidence. Scoring is not yet wired into the session API or background task.
-5. **Report and handoff.** The report generator produces Markdown, sanitized HTML and PDF from a completed session and validated assessment. Review APIs, persistence and Azure storage are not wired. The separate **roleplay-result** schema describes the external Pod D contract; it is not the scoring LLM response format.
+4. **The mark.** When the chat ends, a background job (`run_assessment`) sends the finished chat to a scoring model call that rates the trainee on four fixed weighted criteria and cites real exchanges. Plain code validates the output, derives `handled`, checks the model's evidence against code markers (from the saved per-turn evaluations, the resume and the demand), applies weights and cutoffs, and computes confidence. The result is saved as one JSON snapshot in blob storage.
+5. **Report and handoff.** `render_report` turns that snapshot into Markdown, sanitized HTML and PDF files under `reports/<session_id>/` in blob storage. Review APIs and Azure storage are not wired. The separate **roleplay-result** schema describes the external Pod D contract; it is not the scoring LLM response format.
 
 ## Where it fits in the platform
 ```
@@ -46,7 +46,7 @@ Four pods build four agents and the TPM connects them on Days 8-9. So we release
 ```
 - **Chat turns** run inside the API so replies can stream live. **Slow work** (reading uploads, scoring, PDF) runs as background jobs. Job messages carry IDs only, never text or personal data.
 - **One LLM call per chat turn** returns an assessment of the trainee's answer and the client's reply. Plain code then enforces the rules (one step tougher at a time, the turn limit).
-- **The LLM only judges and speaks.** Weighted scoring, status mapping, evidence/question validation, escalation limits and confidence are plain code. Question-validity inputs still need to be supplied by the backend flow.
+- **The LLM only judges and speaks.** Weighted scoring, status mapping, evidence/question validation, escalation limits and confidence are plain code. See `samples/scoring/scoring-confidence-formulas.md`.
 - **No RAG.** The demand and the profile are short, so both go to the agent whole as extracted JSON: no chunking and no document citations. Scoring evidence cites conversation exchanges.
 
 ## Tech stack
@@ -161,12 +161,12 @@ The program's seed pack is marked **UST CONFIDENTIAL: do not copy outside the pr
 Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interface are deliberately out of scope for now.
 
 ## Status and open questions
-**Done:** the five-table schema; persona, profile, demand and scenario-import APIs; session/chat APIs; PDF, DOCX and TXT text extraction (no OCR); the conversation agent (one model call per turn); the scoring model call; a criterion scoring processor; and a report generator for Markdown, sanitized HTML and PDF.
+**Done:** the five-table schema; persona, profile, demand and scenario-import APIs; session/chat APIs; PDF, DOCX and TXT text extraction (no OCR); the conversation agent (one model call per turn); the scoring model call; the post-session pipeline (scoring, code markers, question validity, `handled`, confidence); and a report generator for Markdown, sanitized HTML and PDF, saved to blob storage.
 
-**Next:** wire scoring and report generation into a single post-session task; compute question-validity and signal inputs from the saved turns, resume and demand; build review workflow and persistence; the real LLM client once API keys arrive; add Azure storage, retries and the 30-day deletion job.
+**Next:** an API to fetch the finished report and its status; the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
 
 **Open questions for the TPM:**
-- How will the selected scenario and per-question validity evidence be stored so scoring and report generation can use them?
+- How will the selected scenario be handled? We dropped it from the report (the agent picks it and nothing saves it); is the outgoing `roleplay-result` contract still required to carry `scenario_id`?
 - What are the allowed values of `handled` in the result (the seed only shows "partly")? We assume yes / partly / no.
 - The seed's pushback scale (1 to 5) contradicts its own examples and the 4-step ladder; which is right?
 - Skills, weights and thresholds: are there official ones? Is there a human-scored set for calibration?

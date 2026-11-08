@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     blob_dir: str = "./storage"
     max_upload_mb: int = 10
-    # True runs the ingest step inside the API call (no Redis or worker needed). Local use only.
+    # True runs the ingest and post-session scoring steps inside the API call (no Redis or worker
+    # needed). Local use only.
     ingest_inline: bool = False
     llm_provider: str = "fake"
     retention_days: int = 30

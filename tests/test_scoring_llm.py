@@ -12,6 +12,7 @@ from app.llm.fake import FakeLLM
 from app.schemas import ScoringConfig, ScoringOutput
 from app.schemas.enums import TurnRole
 from app.scoring import ScoringValidationContext, build_assessment
+from app.scoring.rubric import prompt_config
 from app.scoring.scorer import ScoringError, score_session
 from app.scoring.transcript import ScoringInputError, build_transcript
 from tests.conftest import load_sample
@@ -117,7 +118,7 @@ def test_the_result_goes_straight_into_the_confidence_blend():
 
     assessment = build_assessment(output, _config(), validation, handled="partly")
 
-    assert assessment.overall_score == pytest.approx(45.0)
+    assert assessment.overall_score == pytest.approx(47.5)
     assert [c.id for c in assessment.criteria] == ["C1", "C2", "C3", "C4"]
 
 
@@ -136,12 +137,14 @@ def test_nothing_is_sent_when_the_trainee_never_answered():
 def test_the_model_sees_criterion_ids_and_labels_but_no_weights_or_signals():
     llm = _llm(_good())
 
-    score_session(llm, _config(), _transcript())
+    score_session(llm, prompt_config(_config()), _transcript())
 
     system = llm.calls[0].system
-    assert "C1: owns the delay" in system
-    assert "C4: offers a way to prevent repeat" in system
-    for hidden in ("has_ownership", "has_commitment", "signal", "weight", "cutoff", "confidence"):
+    assert "C1: Answers directly and specifically" in system
+    assert "C4: Takes ownership and offers a next step" in system
+    assert "concrete action, option or commitment" in system  # the description is shown
+    hidden_words = ("has_specifics", "kept_composure", "grounded", "has_commitment", "signal")
+    for hidden in (*hidden_words, "weight", "cutoff", "confidence"):
         assert hidden not in system.lower()
 
 

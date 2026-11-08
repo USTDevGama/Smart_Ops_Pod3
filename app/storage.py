@@ -8,28 +8,36 @@ from app.config import get_settings
 
 
 class BlobStore(Protocol):
-    def save(self, data: bytes, suffix: str) -> str: ...
+    def save(self, data: bytes, suffix: str, name: str | None = None) -> str: ...
 
     def read(self, uri: str) -> bytes: ...
 
     def delete(self, uri: str) -> None: ...
+
+    def exists(self, uri: str) -> bool: ...
 
 
 class LocalBlobStore:
     def __init__(self, root: str | Path):
         self.root = Path(root)
 
-    def save(self, data: bytes, suffix: str) -> str:
-        self.root.mkdir(parents=True, exist_ok=True)
-        name = f"{uuid.uuid4().hex}{suffix}"
-        (self.root / name).write_bytes(data)
-        return name
+    def save(self, data: bytes, suffix: str, name: str | None = None) -> str:
+        """Store `data`. A given `name` (like "reports/<id>/report.pdf") is the uri and is
+        overwritten on a second save, so a retried job leaves one file; otherwise a random name."""
+        uri = name or f"{uuid.uuid4().hex}{suffix}"
+        path = self._path(uri)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return uri
 
     def read(self, uri: str) -> bytes:
         return self._path(uri).read_bytes()
 
     def delete(self, uri: str) -> None:
         self._path(uri).unlink(missing_ok=True)
+
+    def exists(self, uri: str) -> bool:
+        return self._path(uri).is_file()
 
     def _path(self, uri: str) -> Path:
         path = (self.root / uri).resolve()

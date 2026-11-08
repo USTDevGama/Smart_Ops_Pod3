@@ -71,25 +71,11 @@ def _ended_session(db, *, status=SessionStatus.ENDED, unsafe_text=False):
             "escalation_ladder": [{"step": 1, "move": "Ask a question"}],
         },
     )
-    scenario = m.ConfigVersion(
-        kind=ConfigKind.SCENARIO,
-        key="delivery",
-        version_no=2,
-        status=ConfigStatus.PUBLISHED,
-        config={
-            "id": "SC-01",
-            "title": "Delivery slipping",
-            "situation": "A delivery is late.",
-            "client_objections": ["Why is it late?"],
-            "good_answer_contains": ["Owns the delay"],
-        },
-    )
-    db.add_all([persona, scenario])
+    db.add(persona)
     db.flush()
     session = m.RoleplaySession(
         trainee_ref="report-test-user",
         persona_version_id=persona.id,
-        scenario_version_id=scenario.id,
         status=status,
         end_reason=EndReason.TURN_CAP if status == SessionStatus.ENDED else None,
         ended_at=datetime.now(UTC) if status == SessionStatus.ENDED else None,
@@ -141,13 +127,39 @@ def test_generates_markdown_html_and_pdf_for_completed_session(db):
     assert "Overall score: **45.0 / 100**" in report.markdown
     assert "Persona: strict-1.0 | Rubric: r1" in report.markdown
     assert "- Confidence score: 71" in report.markdown
-    assert "Scenario version:" not in report.markdown
+    assert "Scenario" not in report.markdown
     assert "### Turn 1" in report.markdown
     assert "**Client:** Why is the delivery late?" in report.markdown
     assert "**Trainee:** I own the delay." in report.markdown
     assert "Turn 2 (-): No concrete prevention step." in report.markdown
     assert "<table>" in report.html
     assert "<script>" not in report.html
+    assert report.pdf.startswith(b"%PDF-")
+
+
+def test_a_criterion_citing_several_turns_still_renders_to_pdf(db):
+    session = _ended_session(db)
+    assessment = _assessment(
+        criteria=[
+            {
+                "id": "C1",
+                "label": "Owns the delay",
+                "weight": 1,
+                "points": 0.5,
+                "status": "partly",
+                "confidence": 70,
+                "reason": "Hedged first,\nthen specific.",
+                "evidence": [
+                    {"turn": 1, "polarity": "negative"},
+                    {"turn": 2, "polarity": "positive"},
+                ],
+            }
+        ]
+    )
+
+    report = generate_report(db, session.id, assessment)
+
+    assert "Turn 1 (-), Turn 2 (+): Hedged first, then specific." in report.markdown
     assert report.pdf.startswith(b"%PDF-")
 
 

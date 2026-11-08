@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models as m
 from app.reports.schemas import ReportNote, ValidatedAssessment
-from app.schemas.config import PersonaConfig, ScenarioConfig
+from app.schemas.config import PersonaConfig
 from app.schemas.enums import SessionStatus, TurnRole
 
 
@@ -43,8 +43,6 @@ class TranscriptExchange:
 @dataclass(frozen=True)
 class ReportData:
     session_id: str
-    scenario_id: str
-    scenario_title: str
     persona_version: str
     ended_at: datetime
     end_reason: str
@@ -108,12 +106,10 @@ def load_report_data(
         raise ReportNotReadyError("a final report requires an ended session")
 
     persona_version = db.get(m.ConfigVersion, session.persona_version_id)
-    scenario_version = db.get(m.ConfigVersion, session.scenario_version_id)
-    if persona_version is None or scenario_version is None:
-        raise ReportDataError("the session's pinned persona or scenario version is missing")
+    if persona_version is None:
+        raise ReportDataError("the session's pinned persona version is missing")
 
     persona = PersonaConfig.model_validate(persona_version.config)
-    scenario = ScenarioConfig.model_validate(scenario_version.config)
     rows = list(
         db.scalars(
             select(m.Turn).where(m.Turn.session_id == session.id).order_by(m.Turn.idx)
@@ -166,8 +162,6 @@ def load_report_data(
     end_reason = session.end_reason.value if session.end_reason else "unknown"
     return ReportData(
         session_id=str(session.id),
-        scenario_id=scenario.id,
-        scenario_title=scenario.title,
         persona_version=persona.version or f"{persona_version.key} v{persona_version.version_no}",
         ended_at=session.ended_at,
         end_reason=_END_REASON_LABELS.get(end_reason, end_reason.replace("_", " ")),
@@ -207,7 +201,6 @@ def render_markdown(data: ReportData) -> str:
     lines = [
         "# Stakeholder Roleplay Assessment",
         "",
-        f"Scenario: {_md_text(data.scenario_id)} - {_md_text(data.scenario_title)}",
         (
             f"Session: {_md_text(data.session_id)} | "
             f"Persona: {_md_text(data.persona_version)} | "
@@ -233,7 +226,7 @@ def render_markdown(data: ReportData) -> str:
     ]
 
     for criterion in assessment.criteria:
-        evidence = "<br>".join(
+        evidence = ", ".join(
             f"Turn {item.turn} ({'+' if item.polarity == 'positive' else '-'})"
             for item in criterion.evidence
         ) or "None"
@@ -299,7 +292,8 @@ def _md_text(value: str) -> str:
 
 
 def _table_text(value: str) -> str:
-    return _md_text(value)
+    # fpdf2 cannot render a line break inside a table cell, so a cell is always one line.
+    return " ".join(_md_text(value).replace("<br>", " ").split())
 
 
 def render_html(markdown_text: str) -> tuple[str, str]:

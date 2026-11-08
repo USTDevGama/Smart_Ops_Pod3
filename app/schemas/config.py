@@ -75,6 +75,8 @@ class EnvironmentSettings(BaseModel):
 class CriterionConfig(BaseModel):
     id: str = Field(min_length=1)
     label: str = Field(min_length=1)
+    # What the scorer looks for. Shown to the scoring model; never contains weights or signals.
+    description: str = ""
     weight: float = Field(ge=0, le=1)
     signal_keys: list[str] = Field(default_factory=list)
 
@@ -90,12 +92,27 @@ class StatusCutoffs(BaseModel):
         return self
 
 
+class HandledCutoffs(BaseModel):
+    """Overall score (0 to 1) at or above which the client's concern counts as handled."""
+
+    yes: float = Field(default=0.7, ge=0, le=1)
+    partly: float = Field(default=0.4, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "HandledCutoffs":
+        if self.partly >= self.yes:
+            raise ValueError("the partly cutoff must be below the yes cutoff")
+        return self
+
+
 class ConfidenceConfig(BaseModel):
-    evidence_weight: float = Field(default=0.4, ge=0, le=1)
-    question_weight: float = Field(default=0.35, ge=0, le=1)
-    margin_weight: float = Field(default=0.25, ge=0, le=1)
+    # Provisional, not calibrated. Question validity is checked with simple text rules only, so it
+    # carries the least weight.
+    evidence_weight: float = Field(default=0.4, ge=0, le=1)  # evidence agrees with the code signals
+    question_weight: float = Field(default=0.2, ge=0, le=1)
+    margin_weight: float = Field(default=0.4, ge=0, le=1)
     status_margin: float = Field(default=0.1, gt=0, le=1)
-    invalid_question_penalty: float = Field(default=10, ge=0, le=100)
+    invalid_question_penalty: float = Field(default=5, ge=0, le=100)
     short_session_turns: int = Field(default=3, ge=1)
     short_session_cap: float = Field(default=60, ge=0, le=100)
     high_band: float = Field(default=75, ge=0, le=100)
@@ -117,6 +134,7 @@ class ScoringConfig(BaseModel):
     rubric_version: str = Field(min_length=1)
     criteria: list[CriterionConfig] = Field(min_length=1)
     status_cutoffs: StatusCutoffs = Field(default_factory=StatusCutoffs)
+    handled_cutoffs: HandledCutoffs = Field(default_factory=HandledCutoffs)
     confidence: ConfidenceConfig = Field(default_factory=ConfidenceConfig)
 
     @model_validator(mode="after")
