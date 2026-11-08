@@ -87,7 +87,7 @@ The persona's ladder, `t_escalate` and `t_deescalate`, a short history of how ea
 ## One scenario per conversation
 The opening chooses a scenario. The service does **not** save which, so later turns recover it from what **is** saved: the checklist items met in earlier evaluations are word-for-word items of one scenario (`context.settled_scenario`). Before any item is met, the model works the scenario out from the earlier client messages. This is a stopgap and can drift in that first stretch.
 
-Proposed fix, awaiting the service owner: let `TurnOutput` and `SessionContext` carry an optional `scenario_id`, saved in the existing `session.scenario_version_id` column (no migration). The scoring report already reads that column. Then `settled_scenario` reads it first and nothing else changes.
+Proposed fix, awaiting the service owner: let `TurnOutput` and `SessionContext` carry an optional `scenario_id`, saved in the existing `session.scenario_version_id` column (no migration). Then `settled_scenario` reads it first and nothing else changes. The score report no longer needs this: it was changed to run without a scenario, so the fix would only make the agent's own scenario continuity more reliable.
 
 ## Files
 | File | Job |
@@ -118,9 +118,9 @@ Run through the real chat service with Claude Sonnet 5 on Microsoft Foundry, usi
 ## What the agent needs from other people
 | Who | What | Why |
 |---|---|---|
-| Jayant (chat service, `app/llm`) | Let `TurnOutput` and `SessionContext` carry an optional `scenario_id` and save it in `session.scenario_version_id` (no migration) | Today the scenario is recovered from saved checklist items; the score report needs it too |
+| Jayant (chat service, `app/llm`) | Let `TurnOutput` and `SessionContext` carry an optional `scenario_id` and save it in `session.scenario_version_id` (no migration) | Today the scenario is recovered from saved checklist items. The score report no longer needs it, so this is only for the agent's own continuity |
 | Jayant | A working `ProviderLLM`, a timeout field on `LLMRequest`, and separate errors for "call failed" and "reply did not match the schema". Do not send `temperature` to Sonnet 5 models | The agent bounds the wait and retries by itself for now |
-| Disha (scoring, report) | Read the saved rows: `evaluation` on trainee rows, `escalation_level` on client rows. The toughest step reached is the largest saved `escalation_level`, not `proposed_level` | `quote` is an exact substring of the answer, so the BR-12 check can reuse it |
+| Disha (scoring, report) | Read the saved rows: `evaluation` on trainee rows, `escalation_level` on client rows. The toughest step reached is the largest saved `escalation_level`, not `proposed_level`. The post-session job (`app/scoring/pipeline.py`) also uses `evasive`, `composure` and `answer_quality` as independent markers for the confidence | `quote` is an exact substring of the answer, so the BR-12 check can reuse it |
 | The team | Decide the de-escalation rule: ease off after one strong answer (what the model does) or after two (what the persona schema says) | See "First run against a real model" |
 | TPM | May the resume be sent to the model provider (BR-13)? Is the seed pack allowed on the model endpoint? | Both are unanswered |
 
@@ -136,4 +136,4 @@ Run through the real chat service with Claude Sonnet 5 on Microsoft Foundry, usi
 - **The agent never ends the chat.** Ending is the service's (turn limit, grace turns, the trainee). An agent-controlled end is not agreed.
 - **Opening level.** The service saves the opening at level 1 whatever the agent returns, so the opening is written at the ladder's first level.
 - **Temperature 0.2** is what the agent asks for: low, for a stable judgement. Sonnet 5 models reject sampling parameters, so the provider adapter must leave it out for them.
-- **Open with the team:** where the scenario is saved; a timeout and typed errors in `app/llm`; whether sending the resume to the provider is approved (BR-13); whether the demand slot holds a proposal-style document.
+- **Open with the team:** whether the scenario should be saved for the agent's own continuity (the report no longer needs it); a timeout and typed errors in `app/llm`; whether sending the resume to the provider is approved (BR-13); whether the demand slot holds a proposal-style document.
