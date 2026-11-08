@@ -124,7 +124,8 @@ class RoleplayResult(BaseModel):
 
     contract: Literal["roleplay-result"] = "roleplay-result"
     session_id: str
-    scenario_id: str
+    # The agent picks the scenario and nothing saves it, so the pod cannot always fill this.
+    scenario_id: str | None = None
     persona_version: str
     turns: list[ResultTurn] = Field(min_length=1)
     result: ResultBody

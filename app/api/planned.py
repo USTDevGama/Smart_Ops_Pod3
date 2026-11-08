@@ -21,11 +21,6 @@ def _not_built() -> HTTPException:
     return HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "planned, not built yet")
 
 
-@router.get("/sessions/{session_id}/assessment")
-def get_assessment(session_id: UUID, _: CurrentUser = Depends(admin_only)):
-    raise _not_built()
-
-
 @router.get("/admin/review-queue")
 def review_queue(_: CurrentUser = Depends(admin_only)):
     raise _not_built()
@@ -33,16 +28,6 @@ def review_queue(_: CurrentUser = Depends(admin_only)):
 
 @router.post("/admin/sessions/{session_id}/review")
 def review_assessment(session_id: UUID, _: CurrentUser = Depends(admin_only)):
-    raise _not_built()
-
-
-@router.post("/admin/sessions/{session_id}/rescore")
-def rescore_assessment(session_id: UUID, _: CurrentUser = Depends(admin_only)):
-    raise _not_built()
-
-
-@router.get("/admin/sessions/{session_id}/report")
-def get_report(session_id: UUID, _: CurrentUser = Depends(admin_only)):
     raise _not_built()
 
 

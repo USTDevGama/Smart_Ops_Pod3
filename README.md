@@ -56,7 +56,7 @@ Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + 
 | Folder | Purpose | Owner |
 |---|---|---|
 | `app/ingest/` | profile and demand upload endpoints (`router.py`, `demand_router.py`) and text extraction (`pipeline.py`, `extract.py`, `pdf_text.py`, `docx_text.py`; scanned PDFs/OCR are not supported) | endpoints: **Dev A**; reading the files: **Kedar** |
-| `app/reports/` | report generation as Markdown, sanitized HTML and PDF; API and storage integration remain | **Disha** |
+| `app/reports/` | report generation as Markdown, sanitized HTML and PDF; the finished files are saved to blob storage (no report API) | **Disha** |
 | `app/sessions/` | session and chat endpoints, saving turns, the turn limit, the one-step escalation clamp | **Dev B** |
 | `app/agent/` | the turn engine: how one client reply is produced (`TurnEngine`; `placeholder.py` is a temporary stand-in) | **Shubra** |
 | `app/scoring/` | criterion scoring and confidence processor; review workflow remains | **Disha** |
@@ -115,7 +115,7 @@ All paths start with `/api/v1`. The full, always-current list is `docs/openapi.y
 | Profiles | `POST /profiles` (202, then poll), `GET /profiles`, `GET /profiles/{id}`, `DELETE /profiles/{id}` | owner, admin |
 | Demand document | `POST /admin/demand` (202, then poll), `GET /admin/demand`, `GET /admin/demand/{id}`, `DELETE /admin/demand/{id}` | admin |
 | Chat | `POST /sessions`, `GET /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns` (needs an `Idempotency-Key` header; replies as a server-sent event stream), `POST /sessions/{id}/end` | owner, admin |
-| Planned (answer 501) | `GET /sessions/{id}/assessment`, `GET /admin/review-queue`, `POST /admin/sessions/{id}/review` and `/rescore`, `GET /admin/sessions/{id}/report`, `GET /integration/signals` | scoring owner |
+| Planned (answer 501) | `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `GET /integration/signals` | review owner |
 Errors always look like `{"type", "title", "status", "detail"}`. For local work without Redis, set `PODC_INGEST_INLINE=true` so an upload is processed inside the request.
 
 **Reading uploaded files** (profile and demand document) is text only, with no OCR and no AI models, so the worker needs nothing installed beyond `uv sync`. PDF files are read with [pdfplumber](https://github.com/jsvine/pdfplumber), DOCX files with python-docx and TXT files directly. The whole document is kept as one markdown text in the row's `content`, as `{"text": "..."}`: DOCX headings become `#` lines and list items `-` lines, tables in PDF and DOCX become markdown tables, and each PDF page's text is preceded by a `<!-- page N -->` marker. Pictures, charts and figures are ignored, and so is text that exists only inside an image. A PDF with no text layer (a scan) fails with a clear message ("this PDF has no text layer ... upload a text-based PDF"); in a mixed PDF the picture-only pages are skipped and a warning with the page count is logged. Text boxes, headers, footers and footnotes in DOCX are not read, and a two-column PDF is read line by line across the columns. An unreadable file fails with a fixed message; the file's own text is never put in an error or a log line.
@@ -163,10 +163,10 @@ Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interfa
 ## Status and open questions
 **Done:** the five-table schema; persona, profile, demand and scenario-import APIs; session/chat APIs; PDF, DOCX and TXT text extraction (no OCR); the conversation agent (one model call per turn); the scoring model call; the post-session pipeline (scoring, code markers, question validity, `handled`, confidence); and a report generator for Markdown, sanitized HTML and PDF, saved to blob storage.
 
-**Next:** an API to fetch the finished report and its status; the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
+**Next:** how the admin or Pod D gets the saved report files; the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
 
 **Open questions for the TPM:**
-- How will the selected scenario be handled? We dropped it from the report (the agent picks it and nothing saves it); is the outgoing `roleplay-result` contract still required to carry `scenario_id`?
+- Is the outgoing `roleplay-result` contract fine with `scenario_id` now optional? The agent picks the scenario and nothing saves it, so we cannot fill it.
 - What are the allowed values of `handled` in the result (the seed only shows "partly")? We assume yes / partly / no.
 - The seed's pushback scale (1 to 5) contradicts its own examples and the 4-step ladder; which is right?
 - Skills, weights and thresholds: are there official ones? Is there a human-scored set for calibration?

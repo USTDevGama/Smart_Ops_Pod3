@@ -93,7 +93,7 @@ class TurnEngine(Protocol):
 `max_turns` counts trainee replies; each reply completes one client-question/trainee-answer exchange.
 
 ### 3.4 Planned (Disha's area): 501 for now
-Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers 501 in the standard shape until built: `GET /sessions/{id}/assessment`, `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `POST /admin/sessions/{id}/rescore`, `GET /admin/sessions/{id}/report`, `GET /integration/signals`. The session id identifies the current assessment; there is no separate assessment table or ID. Remove a line from `app/api/planned.py` when the real endpoint lands.
+Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers 501 in the standard shape until built: `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `GET /integration/signals`. There are no assessment or report endpoints: the finished assessment and report files are saved to blob storage under `reports/<session_id>/` when a session ends, and there is no separate assessment table or ID. Remove a line from `app/api/planned.py` when the real endpoint lands.
 
 ### 3.5 Already built
 `GET /healthz`, `/readyz`, `/api/v1/meta`.
@@ -112,7 +112,7 @@ Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers
 ## 5. Still to do
 - The real ingest and the real turn engine (both behind the interfaces above).
 - Persist the scenario selected by the agent and validation metadata for each client question so scoring confidence can use it.
-- Scoring and the report now run as background jobs after a session ends (`run_assessment`, then `render_report`) and save `reports/<session_id>/assessment.json` and the report files to blob storage; there is no assessment table. Still to do: the API endpoints that serve them, the review workflow and the Pod D feed. Persistence and review-state storage must be designed only if required, without assuming dedicated tables.
+- Scoring and the report now run as background jobs after a session ends (`run_assessment`, then `render_report`) and save `reports/<session_id>/assessment.json` and the report files to blob storage; there is no assessment table. Still to do: how the admin or Pod D gets the saved files, the review workflow and the Pod D feed. Persistence and review-state storage must be designed only if required, without assuming dedicated tables.
 - Background-job retries, the schedule for the stuck-job sweeper, and the 30-day deletion job.
 - The real LLM provider once API keys arrive.
 - Sandbox test chat for admins; word-by-word reply streaming.

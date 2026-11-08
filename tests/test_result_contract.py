@@ -34,6 +34,13 @@ def test_sample_result_is_valid():
     assert result.result.evidence_turns == [2]
 
 
+def test_the_scenario_is_optional_because_the_pod_does_not_save_it():
+    doc = _sample()
+    doc.pop("scenario_id")
+
+    assert RoleplayResult.model_validate(doc).scenario_id is None
+
+
 def test_evidence_must_point_at_a_real_turn():
     doc = _sample()
     doc["result"]["evidence_turns"] = [99]
