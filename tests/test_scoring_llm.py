@@ -111,8 +111,8 @@ def test_the_result_goes_straight_into_the_confidence_blend():
         trainee_signals={
             1: set(),
             2: set(),
-            3: {"has_date", "has_cost"},
-            4: {"has_ownership", "has_commitment"},
+            3: {"has_specifics", "grounded"},
+            4: {"has_specifics", "has_commitment"},
         },
     )
 
