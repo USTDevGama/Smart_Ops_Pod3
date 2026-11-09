@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -6,8 +9,10 @@ from app.schemas import (
     PersonaConfig,
     ScenarioConfig,
     ScoringConfig,
+    ScoringOutput,
     TurnOutput,
 )
+from app.scoring.rubric import default_scoring_config
 from tests.conftest import load_sample
 
 
@@ -25,14 +30,34 @@ def test_sample_scenario_is_valid():
 
 def test_sample_scoring_profile_is_valid():
     scoring = ScoringConfig.model_validate(load_sample("scoring/default.json"))
-    assert sum(d.weight for d in scoring.dimensions) == pytest.approx(1.0)
+    assert sum(criterion.weight for criterion in scoring.criteria) == pytest.approx(1.0)
+    assert scoring.rubric_version == "r2"
+
+
+def test_sample_scoring_profile_is_the_fixed_rubric_in_code():
+    assert ScoringConfig.model_validate(load_sample("scoring/default.json")) == (
+        default_scoring_config()
+    )
 
 
 def test_weights_must_sum_to_one():
     data = load_sample("scoring/default.json")
-    data["dimensions"][0]["weight"] = 0.9
+    data["criteria"][0]["weight"] = 0.9
     with pytest.raises(ValidationError):
         ScoringConfig.model_validate(data)
+
+
+def test_sample_llm_scoring_output_is_valid():
+    sample = load_sample("results/llm_output.json")
+    scoring = ScoringOutput.model_validate(sample)
+    assert [criterion.id for criterion in scoring.criteria] == ["C1", "C2", "C3", "C4"]
+    assert scoring.criteria[0].points == pytest.approx(0.5)
+    assert isinstance(sample["criteria"][0]["points"], (int, float))
+
+
+def test_scoring_output_json_schema_matches_model():
+    schema_path = Path(__file__).resolve().parents[1] / "docs" / "scoring_output.schema.json"
+    assert json.loads(schema_path.read_text(encoding="utf-8")) == ScoringOutput.model_json_schema()
 
 
 def test_persona_ladder_steps_must_be_in_order_and_within_1_to_4():

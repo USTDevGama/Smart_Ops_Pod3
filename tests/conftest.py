@@ -60,13 +60,15 @@ def api(tmp_path, monkeypatch):
     store = LocalBlobStore(tmp_path / "blobs")
     queued: list = []
     queued_demand: list = []
+    queued_assessment: list = []
     monkeypatch.setattr("app.ingest.router.enqueue_profile_ingest", queued.append)
     monkeypatch.setattr("app.ingest.demand_router.enqueue_demand_ingest", queued_demand.append)
+    monkeypatch.setattr("app.sessions.hooks.enqueue_assessment", queued_assessment.append)
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_blob_store] = lambda: store
     yield SimpleNamespace(
         client=TestClient(app), factory=factory, store=store, queued=queued,
-        queued_demand=queued_demand,
+        queued_demand=queued_demand, queued_assessment=queued_assessment,
     )
     app.dependency_overrides.clear()
 

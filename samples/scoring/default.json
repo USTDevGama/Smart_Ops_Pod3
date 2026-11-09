@@ -1,12 +1,52 @@
 {
-  "dimensions": [
-    {"key": "responsiveness", "label": "Responsiveness (answered the persona's concerns)", "weight": 0.4, "alpha": 0.4},
-    {"key": "communication", "label": "Communication (clear and specific)", "weight": 0.3, "alpha": 0.4},
-    {"key": "pressure_handling", "label": "Pressure handling (composure and recovery)", "weight": 0.3, "alpha": 0.4}
+  "rubric_version": "r2",
+  "criteria": [
+    {
+      "id": "C1",
+      "label": "Answers directly and specifically",
+      "description": "Answers the question asked, with concrete facts, figures, dates or examples. Does not deflect, ramble, or repeat keywords without substance.",
+      "weight": 0.25,
+      "signal_keys": ["has_specifics"]
+    },
+    {
+      "id": "C2",
+      "label": "Holds up under pressure",
+      "description": "Stays composed and professional as the client escalates. Does not turn defensive or cave. Improves the answer after a push, and does not over-promise just to end the pressure.",
+      "weight": 0.3,
+      "signal_keys": ["kept_composure"]
+    },
+    {
+      "id": "C3",
+      "label": "Credible and consistent",
+      "description": "Claims match the trainee's own resume and the project proposal. Is honest about limits, gaps and trade-offs, and does not invent experience or hide what they do not know.",
+      "weight": 0.25,
+      "signal_keys": ["grounded"]
+    },
+    {
+      "id": "C4",
+      "label": "Takes ownership and offers a next step",
+      "description": "Owns the issue, and offers a concrete action, option or commitment the client can hold them to.",
+      "weight": 0.2,
+      "signal_keys": ["has_commitment"]
+    }
   ],
-  "band_cutoffs": {"production_ready": 90, "enterprise_ready": 75, "needs_remediation": 50},
-  "agreement_gap": 25,
-  "min_findings_pass_rate": 0.8,
-  "scoring_runs": 1,
-  "pass_cutoff": 50
+  "status_cutoffs": {
+    "partly": 0.3,
+    "met": 0.7
+  },
+  "handled_cutoffs": {
+    "yes": 0.7,
+    "partly": 0.4
+  },
+  "confidence": {
+    "evidence_weight": 0.4,
+    "question_weight": 0.2,
+    "margin_weight": 0.4,
+    "status_margin": 0.1,
+    "invalid_question_penalty": 5,
+    "short_session_turns": 3,
+    "short_session_cap": 60,
+    "high_band": 75,
+    "medium_band": 50
+  }
 }

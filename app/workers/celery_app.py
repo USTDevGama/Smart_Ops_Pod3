@@ -14,6 +14,5 @@ celery_app.conf.update(
         "ingest_demand": {"queue": "ingest"},
         "sweep_stuck_jobs": {"queue": "ingest"},
         "run_assessment": {"queue": "assess"},
-        "render_report": {"queue": "report"},
     },
 )

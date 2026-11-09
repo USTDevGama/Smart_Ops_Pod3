@@ -1,17 +1,153 @@
-from collections.abc import Iterator
+"""The real model client: Claude, direct (api.anthropic.com) or through Azure AI Foundry.
 
-from app.llm.base import LLMRequest, LLMResponse
+Everything else codes against `LLMClient`, so this is the only place that knows about the
+provider. Settings (`PODC_ANTHROPIC_*`) come from `app/config.py`; the key is a `SecretStr`.
+
+Choices that are easy to get wrong:
+  * `request.temperature` is NOT sent. The current Claude models reject sampling parameters.
+  * `thinking` is sent as disabled. The agent asks for a short JSON reply under a tight timeout,
+    and hidden reasoning would eat `max_tokens` and the wait. (Claude Sonnet 5.5 and later reject
+    `disabled`; if the deployment moves to one of those, send `{"type": "between_tools"}`.)
+  * Errors and logs carry reason codes only (HTTP status, error type, schema name), never the
+    prompt or the model's text (BR-13).
+"""
+
+import logging
+import re
+import time
+from collections.abc import Iterator
+from typing import Any
+
+from pydantic import BaseModel, ValidationError
+
+from app.config import Settings, get_settings
+from app.llm.base import LLMError, LLMRequest, LLMResponse
+
+log = logging.getLogger(__name__)
+
+MAX_RETRIES = 1  # the SDK retries 408/409/429/5xx and connection errors; the callers retry too
+_FENCE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
 
 
 class ProviderLLM:
-    """Real provider client. Not written yet: waiting on the provider, models and API keys.
+    def __init__(self, settings: Settings | None = None, client: Any | None = None):
+        self._settings = settings or get_settings()
+        self._client = client  # tests pass a stand-in; otherwise built on first use
 
-    Implement `complete` and `stream` here (retries, timeouts, JSON validation, a log line per
-    call). Nothing else in the code base should need to change.
-    """
+    # --- LLMClient ------------------------------------------------------------------------------
 
     def complete(self, request: LLMRequest) -> LLMResponse:
-        raise NotImplementedError("No LLM provider configured yet (set up when API keys arrive)")
+        started = time.monotonic()
+        client = self._get_client()
+        message = self._create(client, request)
+
+        if message.stop_reason == "refusal":
+            raise LLMError("the model declined the request (refusal)")
+        text = "".join(b.text for b in message.content if getattr(b, "type", "") == "text")
+        if request.response_schema is not None and message.stop_reason == "max_tokens":
+            raise LLMError("the reply was cut off (max_tokens)")
+
+        usage = message.usage
+        log.info(
+            "llm call purpose=%s model=%s tokens_in=%s tokens_out=%s %.1fs request_id=%s",
+            request.purpose, self._model(), usage.input_tokens, usage.output_tokens,
+            time.monotonic() - started, getattr(message, "_request_id", None),
+        )
+        return LLMResponse(
+            text=text,
+            parsed=_parse(text, request.response_schema),
+            tokens_in=usage.input_tokens,
+            tokens_out=usage.output_tokens,
+        )
 
     def stream(self, request: LLMRequest) -> Iterator[str]:
-        raise NotImplementedError("No LLM provider configured yet (set up when API keys arrive)")
+        import anthropic
+
+        client = self._get_client()
+        try:
+            with client.messages.stream(**self._kwargs(request)) as stream:
+                yield from stream.text_stream
+        except anthropic.APIError as exc:
+            raise _call_failed(exc) from None
+
+    # --- helpers --------------------------------------------------------------------------------
+
+    def _model(self) -> str:
+        s = self._settings
+        if s.anthropic_gateway_url:  # the gateway's own model/deployment id
+            return s.anthropic_model
+        if s.anthropic_use_azure and s.anthropic_azure_deployment:
+            return s.anthropic_azure_deployment
+        return s.anthropic_model
+
+    def _kwargs(self, request: LLMRequest) -> dict[str, Any]:
+        return {
+            "model": self._model(),
+            "max_tokens": request.max_tokens,
+            "system": request.system,
+            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "thinking": {"type": "disabled"},
+        }
+
+    def _create(self, client: Any, request: LLMRequest) -> Any:
+        import anthropic
+
+        try:
+            return client.messages.create(**self._kwargs(request))
+        except anthropic.APIError as exc:
+            raise _call_failed(exc) from None
+
+    def _get_client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        s = self._settings
+        if s.anthropic_api_key is None:
+            raise LLMError("no model key is configured (set PODC_ANTHROPIC_API_KEY)")
+        import anthropic
+
+        key = s.anthropic_api_key.get_secret_value()
+        if s.anthropic_gateway_url:
+            # An internal reverse proxy speaking the plain Anthropic /v1/messages shape: the
+            # vanilla client with its base_url overridden, not the Azure-Foundry-specific class.
+            self._client = anthropic.Anthropic(
+                base_url=s.anthropic_gateway_url, api_key=key,
+                timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES,
+            )
+        elif s.anthropic_use_azure:
+            if not s.anthropic_azure_endpoint:
+                raise LLMError("no Azure endpoint is set (PODC_ANTHROPIC_AZURE_ENDPOINT)")
+            self._client = anthropic.AnthropicFoundry(
+                base_url=s.anthropic_azure_endpoint, api_key=key,
+                timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES,
+            )
+        else:
+            self._client = anthropic.Anthropic(
+                api_key=key, timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES
+            )
+        return self._client
+
+
+def _call_failed(exc: Exception) -> LLMError:
+    """A reason code only: the status and the error type, never the server's message."""
+    status = getattr(exc, "status_code", None)
+    body = getattr(exc, "body", None)
+    kind = body.get("error", {}).get("type") if isinstance(body, dict) else None
+    detail = f"HTTP {status}" if status else type(exc).__name__
+    return LLMError(f"the model call failed ({detail}{f', {kind}' if kind else ''})")
+
+
+def _parse(text: str, schema: type[BaseModel] | None) -> BaseModel | None:
+    if schema is None:
+        return None
+    try:
+        return schema.model_validate_json(_json_body(text))
+    except ValidationError:
+        raise LLMError(f"reply does not match {schema.__name__}") from None
+
+
+def _json_body(text: str) -> str:
+    """The JSON object in a reply, tolerating a code fence or a stray sentence around it."""
+    body = _FENCE.sub("", text.strip()).strip()
+    if not body.startswith("{") and "{" in body and "}" in body:
+        body = body[body.index("{") : body.rindex("}") + 1]
+    return body

@@ -77,6 +77,7 @@
       "type": "object"
     }
   },
+  "description": "Outgoing Pod D contract, distinct from the internal criterion-scoring output.",
   "properties": {
     "contract": {
       "const": "roleplay-result",
@@ -89,8 +90,16 @@
       "type": "string"
     },
     "scenario_id": {
-      "title": "Scenario Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scenario Id"
     },
     "persona_version": {
       "title": "Persona Version",
@@ -115,7 +124,6 @@
   },
   "required": [
     "session_id",
-    "scenario_id",
     "persona_version",
     "turns",
     "result"

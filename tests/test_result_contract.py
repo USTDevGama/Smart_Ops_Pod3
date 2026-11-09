@@ -7,17 +7,38 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas import RoleplayResult
-from tests.conftest import load_sample
 
 
 def _sample() -> dict:
-    return load_sample("results/vendor_delay_result.json")
+    return {
+        "session_id": "sess-sample",
+        "scenario_id": "VD-01",
+        "persona_version": "verma-strict-0.1",
+        "turns": [
+            {"turn": 1, "role": "client", "text": "Why was delivery late?"},
+            {"turn": 2, "role": "trainee", "text": "I own the delay."},
+        ],
+        "result": {
+            "pushback_peak_step": 2,
+            "handled": "partly",
+            "strengths": ["Accepted responsibility"],
+            "gaps": ["No prevention plan"],
+            "evidence_turns": [2],
+        },
+    }
 
 
 def test_sample_result_is_valid():
     result = RoleplayResult.model_validate(_sample())
     assert result.human_review_required is True
-    assert result.result.evidence_turns == [4]
+    assert result.result.evidence_turns == [2]
+
+
+def test_the_scenario_is_optional_because_the_pod_does_not_save_it():
+    doc = _sample()
+    doc.pop("scenario_id")
+
+    assert RoleplayResult.model_validate(doc).scenario_id is None
 
 
 def test_evidence_must_point_at_a_real_turn():

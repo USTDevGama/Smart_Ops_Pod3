@@ -45,8 +45,10 @@ def test_stream_yields_the_reply_in_pieces():
     assert "".join(FakeLLM({"turn": ["hello there"]}).stream(_request())).strip() == "hello there"
 
 
-def test_factory_returns_fake_by_default_and_stub_for_other_providers():
-    assert isinstance(get_llm_client(Settings(llm_provider="fake")), FakeLLM)
-    assert isinstance(get_llm_client(Settings(llm_provider="anything-else")), ProviderLLM)
-    with pytest.raises(NotImplementedError):
-        ProviderLLM().complete(_request())
+def test_factory_returns_fake_by_default_and_the_real_client_for_other_providers():
+    # _env_file=None: never read a developer's real .env (it may hold a live key) in a test
+    assert isinstance(get_llm_client(Settings(_env_file=None, llm_provider="fake")), FakeLLM)
+    other = Settings(_env_file=None, llm_provider="anything-else")
+    assert isinstance(get_llm_client(other), ProviderLLM)
+    with pytest.raises(LLMError, match="no model key"):  # no key configured, so no call is made
+        ProviderLLM(other).complete(_request())

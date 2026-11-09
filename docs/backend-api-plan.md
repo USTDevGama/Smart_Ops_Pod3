@@ -4,10 +4,9 @@
 The scaffold is pushed. The team then narrowed what we build next:
 - **Kedar** owns the ingestion work (reading the uploaded files, OCR) and the **UI**.
 - **Shubra** owns the **agent**: how one client reply is produced. It is not yet decided whether that is LangGraph or a plain LLM call with a prompt (LangChain), so our code must not depend on that choice.
-- **Disha** owns scoring, review and reports. We only list placeholder endpoints for those.
-- **We** build the backend APIs and their logic: settings, the two uploads, sessions, and the chat plumbing (storing turns, limits, safety checks). We call the agent through a small fixed interface.
-- These tables are **not needed now** and are not in the schema: `app_user`, `audit_log`, `llm_call_log`, `assessment`, `assessment_evidence`, `review`, `report`. The scoring-profile setting is gone too; scoring will add them back when it is built.
-
+- **Disha** owns scoring, review and reports. A standalone scoring processor and report renderer exist; the review workflow and API integration are still pending.
+- **We** build the backend APIs and their logic: settings, profile and demand uploads, sessions, and chat plumbing (storing turns, limits, safety checks). We call the agent through a small fixed interface.
+- These dedicated tables are not in the schema: `app_user`, `audit_log`, `llm_call_log`, `assessment`, `assessment_evidence`, `review` (and `report`, which only pointed at `assessment`). The scoring-profile setting is gone too. Current scoring/report work uses the session's pinned settings and transcript; no dedicated assessment, review, or report tables are planned.
 The design still holds: one LLM call per chat turn, plain code enforces the rules, no RAG, trainee text is treated as data, nothing important lives only in Redis.
 
 ## What the architect call (05-Nov) decided
@@ -91,10 +90,10 @@ class TurnEngine(Protocol):
 6. End the session if the trainee has used `max_turns` (plus `grace_turns` only while answers are improving), reason `turn_cap`.
 7. Reply with `message` (the client's turn) then `done` (`level`, `turns_used`, `ended`, `end_reason`, `replayed`). The reply is sent when ready, not word by word; real token streaming would need the engine to support it and is a later change.
 
-`max_turns` counts trainee messages (the program's open question: messages or exchanges).
+`max_turns` counts trainee replies; each reply completes one client-question/trainee-answer exchange.
 
 ### 3.4 Planned (Disha's area): 501 for now
-Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers 501 in the standard shape until built: `GET /sessions/{id}/assessment`, `GET /admin/review-queue`, `POST /admin/assessments/{id}/review`, `POST /admin/assessments/{id}/rescore`, `GET /assessments/{id}/report`, `GET /integration/signals`. Remove a line from `app/api/planned.py` when the real endpoint lands.
+Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers 501 in the standard shape until built: `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `GET /integration/signals`. There are no assessment or report endpoints: the finished assessment and report files are saved to blob storage under `reports/<session_id>/` when a session ends, and there is no separate assessment table or ID. Remove a line from `app/api/planned.py` when the real endpoint lands.
 
 ### 3.5 Already built
 `GET /healthz`, `/readyz`, `/api/v1/meta`.
@@ -112,7 +111,8 @@ Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers
 
 ## 5. Still to do
 - The real ingest and the real turn engine (both behind the interfaces above).
-- Scoring, review, reports, the Pod D feed, and their tables.
+- Persist the scenario selected by the agent and validation metadata for each client question so scoring confidence can use it.
+- Scoring and the report now run as one background job after a session ends (`run_assessment`) and save `reports/<session_id>/assessment.json` and the report files to blob storage; there is no assessment table. Still to do: how the admin or Pod D gets the saved files, the review workflow and the Pod D feed. Persistence and review-state storage must be designed only if required, without assuming dedicated tables.
 - Background-job retries, the schedule for the stuck-job sweeper, and the 30-day deletion job.
 - The real LLM provider once API keys arrive.
 - Sandbox test chat for admins; word-by-word reply streaming.

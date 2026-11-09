@@ -1,5 +1,10 @@
-"""Scoring pipeline (owner: Dev C): scoring graph, quote checker, signals, blend, confidence.
+"""Scoring pipeline (owner: Dev C): criterion validation, signals, weighted score, confidence.
 
-Code against app.schemas (ScoringOutput, DimensionResult, Assessment, ScoringConfig) and
-app.llm.LLMClient only.
+`ScoringOutput` is the final criterion-level output from the conversation-agent component. Code
+validates its exchange citations and combines it with the versioned rubric and validation signals
+to produce an `Assessment`.
 """
+
+from app.scoring.processor import ScoringValidationContext, build_assessment
+
+__all__ = ["ScoringValidationContext", "build_assessment"]

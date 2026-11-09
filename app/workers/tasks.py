@@ -1,13 +1,15 @@
 """Background job stubs. Messages carry IDs only, never profile text or personal data.
 
 Each task must be safe to run twice: check the row's status first and overwrite its own rows.
-Owners: ingest_profile and ingest_demand -> Dev A, run_assessment -> Dev C, render_report -> Dev A,
+Owners: ingest_profile and ingest_demand -> Dev A, run_assessment (score and report) -> Disha,
 sweep_stuck_jobs and the retention purge -> Dev D.
 """
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.ingest.errors import TransientIngestError
+from app.llm.base import LLMError
+from app.scoring.scorer import ScoringError
 from app.workers.celery_app import celery_app
 
 # A storage or database hiccup is tried again (1, 2, 4 ... seconds apart, up to 3 retries). The
@@ -19,6 +21,17 @@ INGEST_RETRY = {
     "retry_backoff_max": 300,
     "retry_jitter": True,
     "max_retries": 3,
+}
+
+# A failed or unusable model reply, or a database hiccup, is tried again 30, 60 ... seconds
+# apart, up to 2 retries. A saved score is reused on a retry, so the model is not called twice.
+ASSESS_RETRY = {
+    "bind": True,
+    "autoretry_for": (ScoringError, LLMError, SQLAlchemyError),
+    "retry_backoff": 30,
+    "retry_backoff_max": 300,
+    "retry_jitter": False,
+    "max_retries": 2,
 }
 
 
@@ -46,14 +59,16 @@ def ingest_demand(self, demand_id: str) -> None:
     )
 
 
-@celery_app.task(name="run_assessment")
-def run_assessment(assessment_id: str) -> None:
-    raise NotImplementedError("Dev C: scoring graph, quote check, blend, confidence")
+@celery_app.task(name="run_assessment", **ASSESS_RETRY)
+def run_assessment(self, session_id: str) -> None:
+    """Score the ended chat and write the report files (the whole post-session job)."""
+    from uuid import UUID
 
+    from app.scoring.pipeline import assess_and_render_in_new_session
 
-@celery_app.task(name="render_report")
-def render_report(assessment_id: str) -> None:
-    raise NotImplementedError("Dev A: HTML to PDF report with citations")
+    # Imported here so the API process, which only sends jobs, does not load the PDF and
+    # Markdown libraries.
+    assess_and_render_in_new_session(UUID(session_id))
 
 
 @celery_app.task(name="sweep_stuck_jobs")

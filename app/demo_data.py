@@ -121,25 +121,47 @@ def load_demo_data(db: Session) -> dict[str, int]:
     db.add_all([s1, s2])
     db.flush()
 
-    # --- the chat for S1 (text taken from the sample result) -------------------------------
-    sample = _load("results/vendor_delay_result.json")
+    # --- the chat for S1 ------------------------------------------------------------------
+    messages = [
+        ("client", "The project is late again. Why was I not told earlier?"),
+        (
+            "trainee",
+            "I should have raised the delay sooner. I found the supplier issue last Tuesday "
+            "and own the late notice.",
+        ),
+        ("client", "I need a revised date, and what it will cost."),
+        (
+            "trainee",
+            "We can deliver on 9 June after two extra days of testing. The delay adds 3 developer "
+            "days, and our team absorbs that cost.",
+        ),
+        ("client", "How will you prevent this happening again?"),
+    ]
     evaluations = {
-        1: Evaluation(answer_quality=0.2, checklist_met=[], evasive=False, composure=0.9,
-                      quote="looking at options", proposed_level=3),
-        3: Evaluation(answer_quality=0.85, composure=0.9, proposed_level=2,
-                      quote="The supplier now commits to 9 June",
-                      checklist_met=scenario_cfg.good_answer_contains[:3]),
+        1: Evaluation(
+            answer_quality=0.55,
+            checklist_met=scenario_cfg.good_answer_contains[:1],
+            composure=0.9,
+            quote="own the late notice",
+            proposed_level=3,
+        ),
+        3: Evaluation(
+            answer_quality=0.85,
+            checklist_met=scenario_cfg.good_answer_contains[:2],
+            composure=0.9,
+            quote="9 June",
+            proposed_level=2,
+        ),
     }
     levels = {0: 2, 2: 3, 4: 3}  # the client's step in each of its replies
     turns: dict[int, m.Turn] = {}
-    for item in sample["turns"]:
-        idx = item["turn"] - 1  # the result format counts from 1, the table from 0
-        is_client = item["role"] == "client"
+    for idx, (role, text) in enumerate(messages):
+        is_client = role == "client"
         if idx in evaluations:  # the quote must really be in the message
-            assert evaluations[idx].quote in item["text"]
+            assert evaluations[idx].quote in text
         turns[idx] = m.Turn(
             id=_id(f"s1-turn-{idx}"), session_id=s1.id, idx=idx,
-            role=TurnRole.PERSONA if is_client else TurnRole.TRAINEE, content=item["text"],
+            role=TurnRole.PERSONA if is_client else TurnRole.TRAINEE, content=text,
             escalation_level=levels[idx] if is_client else None,
             evaluation=evaluations[idx].model_dump(mode="json") if idx in evaluations else None,
             idempotency_key=None if is_client else f"k-{idx:04d}",

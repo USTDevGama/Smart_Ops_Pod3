@@ -25,6 +25,6 @@ def test_jobs_are_routed_to_their_queues():
     assert routes["ingest_profile"]["queue"] == "ingest"
     assert routes["ingest_demand"]["queue"] == "ingest"
     assert routes["run_assessment"]["queue"] == "assess"
-    assert routes["render_report"]["queue"] == "report"
+    assert "render_report" not in routes  # scoring and the report are one job
     for name in routes:
         assert name in celery_app.tasks

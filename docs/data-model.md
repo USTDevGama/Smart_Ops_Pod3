@@ -2,8 +2,7 @@
 
 The system remembers things in **5 tables** (PostgreSQL in real use, SQLite in tests). This page explains each table, each column and why it is there. The source of truth is `app/db/models.py`. The migration is `alembic/versions/0001_initial.py`, which creates exactly these 5 tables (it replaces the earlier migrations, since nothing is deployed yet). If you ran an older version, delete your local database and run `alembic upgrade head` again.
 
-**What was removed, and why.** Users, scoring, review, reports, the AI-call log and the audit log are not being built now, so their tables are not there (they were in the first draft of the schema): `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. They come back, through a new migration, when those features are built. The data shapes for scoring and the program's result format are still in `app/schemas/` for that work.
-
+**What was removed, and why.** The tables for users, scoring, review, reports, the AI-call log and the audit log are not there (they were in the first draft of the schema): `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. The current plan does not restore dedicated scoring, review, or report tables. Scoring and reports use the pinned settings and transcript as inputs; report artifacts are produced separately. If durable review history or score snapshots become a requirement, decide how to store them before adding schema or migrations. Shared scoring and result contracts live in `app/schemas/`.
 Plain-words key:
 - **id**: every table has one. A unique row number (a UUID).
 - **-> table**: this column points at a row in another table (a "foreign key"). The database refuses a value that does not exist there.
@@ -15,7 +14,7 @@ Plain-words key:
 A strict-client round, in effect a managerial round. The agent compares the **demand** (what the project needs, an admin uploads it; it comes from the Gama team) with the trainee's **profile** (their resume, uploaded by the trainee), and asks questions that fit both. It gets tougher or easier by itself depending on how the trainee answers, choosing from a one-time dataset of **scenarios**. The technical interview is a different agent, and the trainees' training history is a background process. Neither is ours.
 
 How that shows up in the tables:
-- **Two plain uploads, no chunking.** Both the profile and the demand document are short, so there is no segment table and no citations. The pipeline (Kedar) reads each file and whatever it extracts is saved as one JSON value in the row's `content` column. The agent gets that JSON as it is. Today that value is `{"text": "<markdown>"}`: the whole document as markdown, with `#` headings, `-` list items, markdown tables and, for PDFs, a `<!-- page N -->` marker before each page.
+- **Two plain uploads, no chunking.** There is no segment table or source-document chunk citations. The pipeline reads each file and saves extracted text as JSON in the row's `content` column. Today the shape is `{"text": "<markdown>"}`, including headings, lists, tables and, for PDFs, `<!-- page N -->` page markers. The agent receives this content as-is. Scoring evidence can cite transcript exchanges; these are distinct from document citations.
 - **One demand for everyone:** the newest demand document that is `ready`.
 - **Scenarios are not configured by hand.** They are loaded in bulk once (an admin sends the whole dataset). The trainee does not pick one.
 - **A chat ends only at `max_turns`** (plus `grace_turns` while answers are improving), or when someone ends it.

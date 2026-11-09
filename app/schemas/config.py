@@ -72,34 +72,76 @@ class EnvironmentSettings(BaseModel):
     max_turns: int = Field(ge=1)
 
 
-class DimensionConfig(BaseModel):
-    key: str
-    label: str
+class CriterionConfig(BaseModel):
+    id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    # What the scorer looks for. Shown to the scoring model; never contains weights or signals.
+    description: str = ""
     weight: float = Field(ge=0, le=1)
-    alpha: float = Field(default=0.4, ge=0, le=1)  # share of the code score in the blend
+    signal_keys: list[str] = Field(default_factory=list)
 
 
-class BandCutoffs(BaseModel):
-    """Placeholder cutoffs (not from the BRD): score >= value gets that band."""
+class StatusCutoffs(BaseModel):
+    partly: float = Field(default=0.3, ge=0, le=1)
+    met: float = Field(default=0.7, ge=0, le=1)
 
-    production_ready: float = 90
-    enterprise_ready: float = 75
-    needs_remediation: float = 50  # below this: not ready
+    @model_validator(mode="after")
+    def _ordered(self) -> "StatusCutoffs":
+        if self.partly >= self.met:
+            raise ValueError("the partly cutoff must be below the met cutoff")
+        return self
+
+
+class HandledCutoffs(BaseModel):
+    """Overall score (0 to 1) at or above which the client's concern counts as handled."""
+
+    yes: float = Field(default=0.7, ge=0, le=1)
+    partly: float = Field(default=0.4, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "HandledCutoffs":
+        if self.partly >= self.yes:
+            raise ValueError("the partly cutoff must be below the yes cutoff")
+        return self
+
+
+class ConfidenceConfig(BaseModel):
+    # Provisional, not calibrated. Question validity is checked with simple text rules only, so it
+    # carries the least weight.
+    evidence_weight: float = Field(default=0.4, ge=0, le=1)  # evidence agrees with the code signals
+    question_weight: float = Field(default=0.2, ge=0, le=1)
+    margin_weight: float = Field(default=0.4, ge=0, le=1)
+    status_margin: float = Field(default=0.1, gt=0, le=1)
+    invalid_question_penalty: float = Field(default=5, ge=0, le=100)
+    short_session_turns: int = Field(default=3, ge=1)
+    short_session_cap: float = Field(default=60, ge=0, le=100)
+    high_band: float = Field(default=75, ge=0, le=100)
+    medium_band: float = Field(default=50, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _valid_ranges(self) -> "ConfidenceConfig":
+        total = self.evidence_weight + self.question_weight + self.margin_weight
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"confidence weights must sum to 1 (got {total})")
+        if self.question_weight + self.margin_weight == 0:
+            raise ValueError("question and margin weights cannot both be zero")
+        if self.medium_band >= self.high_band:
+            raise ValueError("the medium confidence cutoff must be below the high cutoff")
+        return self
 
 
 class ScoringConfig(BaseModel):
-    dimensions: list[DimensionConfig] = Field(min_length=1)
-    band_cutoffs: BandCutoffs = Field(default_factory=BandCutoffs)
-    agreement_gap: float = Field(default=25, ge=0, le=100)  # code-vs-LLM gap that flags a dimension
-    min_findings_pass_rate: float = Field(default=0.8, ge=0, le=1)  # citations that must pass
-    scoring_runs: int = Field(default=1, ge=1, le=5)
-    pass_cutoff: float = Field(default=50, ge=0, le=100)
+    rubric_version: str = Field(min_length=1)
+    criteria: list[CriterionConfig] = Field(min_length=1)
+    status_cutoffs: StatusCutoffs = Field(default_factory=StatusCutoffs)
+    handled_cutoffs: HandledCutoffs = Field(default_factory=HandledCutoffs)
+    confidence: ConfidenceConfig = Field(default_factory=ConfidenceConfig)
 
     @model_validator(mode="after")
-    def _weights_sum_to_one(self) -> "ScoringConfig":
-        total = sum(d.weight for d in self.dimensions)
+    def _valid_rubric(self) -> "ScoringConfig":
+        total = sum(criterion.weight for criterion in self.criteria)
         if abs(total - 1.0) > 1e-6:
-            raise ValueError(f"dimension weights must sum to 1 (got {total})")
-        if len({d.key for d in self.dimensions}) != len(self.dimensions):
-            raise ValueError("dimension keys must be unique")
+            raise ValueError(f"criterion weights must sum to 1 (got {total})")
+        if len({criterion.id for criterion in self.criteria}) != len(self.criteria):
+            raise ValueError("criterion ids must be unique")
         return self
