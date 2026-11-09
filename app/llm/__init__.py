@@ -10,7 +10,7 @@ def get_llm_client(settings: Settings | None = None) -> LLMClient:
     settings = settings or get_settings()
     if settings.llm_provider == "fake":
         return FakeLLM(strict=False)
-    return ProviderLLM()
+    return ProviderLLM(settings)
 
 
 __all__ = [
