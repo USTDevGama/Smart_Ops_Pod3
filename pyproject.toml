@@ -22,6 +22,10 @@ dependencies = [
     "bleach>=6.2,<7",
     "pdfplumber>=0.11.10",
     "python-docx>=1.2.0",
+    "anthropic>=2.6,<3",
+    # Only needed for PODC_ANTHROPIC_PROXY_URL=socks5h://... (routing through an SSH -D tunnel).
+    # anthropic's http client is httpx2, which (like httpx) needs this for a socks:// proxy.
+    "socksio>=1,<2",
 ]
 
 [dependency-groups]

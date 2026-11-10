@@ -1,7 +1,12 @@
-"""The real model client: Claude, direct (api.anthropic.com) or through Azure AI Foundry.
+"""The real model client: Claude, direct, through Azure AI Foundry, or through an internal
+Anthropic-compatible gateway.
 
 Everything else codes against `LLMClient`, so this is the only place that knows about the
 provider. Settings (`PODC_ANTHROPIC_*`) come from `app/config.py`; the key is a `SecretStr`.
+If no key is set directly, it is fetched from Azure Key Vault instead (`app/llm/vault.py`,
+`PODC_AZURE_*`) - a direct key always wins. If this machine cannot reach the model directly,
+`PODC_ANTHROPIC_PROXY_URL` routes the call through a local SOCKS/HTTP proxy instead (typically
+an `ssh -D` tunnel to a host that can reach it).
 
 Choices that are easy to get wrong:
   * `request.temperature` is NOT sent. The current Claude models reject sampling parameters.
@@ -101,30 +106,51 @@ class ProviderLLM:
         if self._client is not None:
             return self._client
         s = self._settings
-        if s.anthropic_api_key is None:
-            raise LLMError("no model key is configured (set PODC_ANTHROPIC_API_KEY)")
+        key = self._resolve_key()
         import anthropic
 
-        key = s.anthropic_api_key.get_secret_value()
+        # When this machine cannot reach the model directly (e.g. a network-proxy block), route
+        # through a local SOCKS/HTTP proxy instead - typically the near end of an `ssh -D` tunnel
+        # to a host that can reach it. Built the same way regardless of which client class below
+        # ends up using it.
+        extra: dict[str, Any] = {}
+        if s.anthropic_proxy_url:
+            extra["http_client"] = anthropic.DefaultHttpxClient(proxy=s.anthropic_proxy_url)
+
         if s.anthropic_gateway_url:
             # An internal reverse proxy speaking the plain Anthropic /v1/messages shape: the
             # vanilla client with its base_url overridden, not the Azure-Foundry-specific class.
             self._client = anthropic.Anthropic(
                 base_url=s.anthropic_gateway_url, api_key=key,
-                timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES,
+                timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES, **extra,
             )
         elif s.anthropic_use_azure:
             if not s.anthropic_azure_endpoint:
                 raise LLMError("no Azure endpoint is set (PODC_ANTHROPIC_AZURE_ENDPOINT)")
             self._client = anthropic.AnthropicFoundry(
                 base_url=s.anthropic_azure_endpoint, api_key=key,
-                timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES,
+                timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES, **extra,
             )
         else:
             self._client = anthropic.Anthropic(
-                api_key=key, timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES
+                api_key=key, timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES, **extra
             )
         return self._client
+
+    def _resolve_key(self) -> str:
+        """A direct key always wins; otherwise fall back to the Key Vault secret (if the vault
+        settings look configured at all - a partial vault config raises its own clear error)."""
+        s = self._settings
+        if s.anthropic_api_key is not None:
+            return s.anthropic_api_key.get_secret_value()
+        if s.azure_vault_url:
+            from app.llm.vault import fetch_secret
+
+            return fetch_secret(s)
+        raise LLMError(
+            "no model key is configured (set PODC_ANTHROPIC_API_KEY, or the PODC_AZURE_VAULT_* "
+            "settings)"
+        )
 
 
 def _call_failed(exc: Exception) -> LLMError:

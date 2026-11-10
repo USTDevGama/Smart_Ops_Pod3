@@ -184,6 +184,68 @@ def test_the_key_never_appears_in_the_settings_repr():
     assert "sk-test-not-real" not in repr(_settings())
 
 
+def test_falls_back_to_the_vault_only_when_no_direct_key_is_set(monkeypatch):
+    # _resolve_key() directly: a client built from the key only matters once it is used, and an
+    # injected `client=` (as the other tests use) skips key resolution entirely.
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda settings: "vault-key")
+    settings = _settings(anthropic_api_key=None, azure_vault_url="https://vault.invalid")
+    assert ProviderLLM(settings)._resolve_key() == "vault-key"
+
+
+def test_a_direct_key_wins_over_the_vault(monkeypatch):
+    monkeypatch.setattr(
+        "app.llm.vault.fetch_secret",
+        lambda settings: (_ for _ in ()).throw(AssertionError("vault should not be called")),
+    )
+    settings = _settings(azure_vault_url="https://vault.invalid")  # api_key is also set
+    assert ProviderLLM(settings)._resolve_key() == "sk-test-not-real"
+
+
+def test_neither_key_nor_vault_is_a_clear_error():
+    with pytest.raises(LLMError, match="PODC_AZURE_VAULT"):
+        ProviderLLM(_settings(anthropic_api_key=None)).complete(_request())
+
+
+def test_routes_through_a_local_proxy_when_one_is_set(monkeypatch):
+    """A PODC_ANTHROPIC_PROXY_URL (the near end of an `ssh -D` tunnel) gets wired into the
+    client's http_client, regardless of which of the three client shapes is in use."""
+    built: dict = {}
+    real_client_cls = __import__("anthropic").Anthropic
+
+    class _Capturing(real_client_cls):
+        def __init__(self, **kwargs):
+            built.update(kwargs)
+            super().__init__(**{k: v for k, v in kwargs.items() if k != "http_client"})
+            self.messages.create = lambda **_: _message('{"ok": true, "word": "x"}')
+
+    monkeypatch.setattr("anthropic.Anthropic", _Capturing)
+    settings = _settings(
+        anthropic_gateway_url="https://llmproxy.example.invalid/",
+        anthropic_proxy_url="socks5h://127.0.0.1:1080",
+    )
+    ProviderLLM(settings).complete(_request())
+
+    import anthropic
+
+    assert isinstance(built["http_client"], anthropic.DefaultHttpxClient)
+
+
+def test_no_proxy_setting_means_no_http_client_override(monkeypatch):
+    built: dict = {}
+    real_client_cls = __import__("anthropic").Anthropic
+
+    class _Capturing(real_client_cls):
+        def __init__(self, **kwargs):
+            built.update(kwargs)
+            super().__init__(**kwargs)
+            self.messages.create = lambda **_: _message('{"ok": true, "word": "x"}')
+
+    monkeypatch.setattr("anthropic.Anthropic", _Capturing)
+    settings = _settings(anthropic_gateway_url="https://llmproxy.example.invalid/")
+    ProviderLLM(settings).complete(_request())
+    assert "http_client" not in built
+
+
 def test_stream_yields_the_pieces():
     stub = StubClient(pieces=("hel", "lo"))
     assert "".join(ProviderLLM(_settings(), client=stub).stream(_request())) == "hello"
