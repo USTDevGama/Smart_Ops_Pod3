@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     # Azure-AI-Foundry-specific one). anthropic_model is the model/deployment id to send it.
     anthropic_gateway_url: str | None = None
     anthropic_timeout_s: float = 30.0
+    # Fallback source for anthropic_api_key: an Azure Key Vault secret, fetched at call time via
+    # an app registration's client-credentials flow (no key ever sits in a config file). Used only
+    # when anthropic_api_key is unset; a direct key always wins. All five must be set together.
+    azure_vault_url: str | None = None
+    azure_vault_secret_name: str | None = None
+    azure_tenant_id: str | None = None
+    azure_client_id: str | None = None
+    azure_client_secret: SecretStr | None = None
     retention_days: int = 30
     dev_auth_enabled: bool = True
     # Local folder holding the program's confidential seed pack. Never inside this repo.

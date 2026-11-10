@@ -184,6 +184,28 @@ def test_the_key_never_appears_in_the_settings_repr():
     assert "sk-test-not-real" not in repr(_settings())
 
 
+def test_falls_back_to_the_vault_only_when_no_direct_key_is_set(monkeypatch):
+    # _resolve_key() directly: a client built from the key only matters once it is used, and an
+    # injected `client=` (as the other tests use) skips key resolution entirely.
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda settings: "vault-key")
+    settings = _settings(anthropic_api_key=None, azure_vault_url="https://vault.invalid")
+    assert ProviderLLM(settings)._resolve_key() == "vault-key"
+
+
+def test_a_direct_key_wins_over_the_vault(monkeypatch):
+    monkeypatch.setattr(
+        "app.llm.vault.fetch_secret",
+        lambda settings: (_ for _ in ()).throw(AssertionError("vault should not be called")),
+    )
+    settings = _settings(azure_vault_url="https://vault.invalid")  # api_key is also set
+    assert ProviderLLM(settings)._resolve_key() == "sk-test-not-real"
+
+
+def test_neither_key_nor_vault_is_a_clear_error():
+    with pytest.raises(LLMError, match="PODC_AZURE_VAULT"):
+        ProviderLLM(_settings(anthropic_api_key=None)).complete(_request())
+
+
 def test_stream_yields_the_pieces():
     stub = StubClient(pieces=("hel", "lo"))
     assert "".join(ProviderLLM(_settings(), client=stub).stream(_request())) == "hello"

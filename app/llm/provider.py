@@ -1,7 +1,10 @@
-"""The real model client: Claude, direct (api.anthropic.com) or through Azure AI Foundry.
+"""The real model client: Claude, direct, through Azure AI Foundry, or through an internal
+Anthropic-compatible gateway.
 
 Everything else codes against `LLMClient`, so this is the only place that knows about the
 provider. Settings (`PODC_ANTHROPIC_*`) come from `app/config.py`; the key is a `SecretStr`.
+If no key is set directly, it is fetched from Azure Key Vault instead (`app/llm/vault.py`,
+`PODC_AZURE_*`) - a direct key always wins.
 
 Choices that are easy to get wrong:
   * `request.temperature` is NOT sent. The current Claude models reject sampling parameters.
@@ -101,11 +104,9 @@ class ProviderLLM:
         if self._client is not None:
             return self._client
         s = self._settings
-        if s.anthropic_api_key is None:
-            raise LLMError("no model key is configured (set PODC_ANTHROPIC_API_KEY)")
+        key = self._resolve_key()
         import anthropic
 
-        key = s.anthropic_api_key.get_secret_value()
         if s.anthropic_gateway_url:
             # An internal reverse proxy speaking the plain Anthropic /v1/messages shape: the
             # vanilla client with its base_url overridden, not the Azure-Foundry-specific class.
@@ -125,6 +126,21 @@ class ProviderLLM:
                 api_key=key, timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES
             )
         return self._client
+
+    def _resolve_key(self) -> str:
+        """A direct key always wins; otherwise fall back to the Key Vault secret (if the vault
+        settings look configured at all - a partial vault config raises its own clear error)."""
+        s = self._settings
+        if s.anthropic_api_key is not None:
+            return s.anthropic_api_key.get_secret_value()
+        if s.azure_vault_url:
+            from app.llm.vault import fetch_secret
+
+            return fetch_secret(s)
+        raise LLMError(
+            "no model key is configured (set PODC_ANTHROPIC_API_KEY, or the PODC_AZURE_VAULT_* "
+            "settings)"
+        )
 
 
 def _call_failed(exc: Exception) -> LLMError:
