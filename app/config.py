@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,6 +36,11 @@ class Settings(BaseSettings):
     # Azure-AI-Foundry-specific one). anthropic_model is the model/deployment id to send it.
     anthropic_gateway_url: str | None = None
     anthropic_timeout_s: float = 30.0
+    # How to turn thinking off, since this is model-generation-specific and the three shapes
+    # above can each point at a different model: most Claude models accept {"type": "disabled"},
+    # but Claude Sonnet 5.5 rejects it and needs {"type": "between_tools"} instead. Set this to
+    # match whatever model the deployment actually points at.
+    anthropic_thinking_off: Literal["disabled", "between_tools"] = "disabled"
     # Route the model call through a local proxy (e.g. an SSH -D SOCKS tunnel to a host that can
     # reach the gateway, when this machine cannot): "socks5h://127.0.0.1:1080" or
     # "http://127.0.0.1:8080". Leave unset to connect directly.
