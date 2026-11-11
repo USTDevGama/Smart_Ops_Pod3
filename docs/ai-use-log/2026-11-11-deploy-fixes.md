@@ -10,3 +10,4 @@
   - The rollback tag file name is modelled on Pod D's `.last_good_tag`; Pod D's workflow itself was not seen.
   - Whether the `update-ca-certificates` step is enough for `pip` inside the build is not known until the first run.
   - An earlier diagnosis in this work (that the model gateway was being re-signed by the proxy) was wrong: the failures came from `SSL_CERT_FILE` being set in the shared shell profile. The gateway needs no certificate.
+  - After the first run the `actions/checkout` action was replaced by a plain `git fetch` step, because the runner on the VM cannot download actions from `codeload.github.com` (the proxy answers 403). The step was run against a local bare repository only; whether `git` over HTTPS to `github.com` with the job token works from the VM is known only from the next run.
