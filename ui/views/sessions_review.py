@@ -4,7 +4,7 @@ import streamlit as st
 
 from ui import state
 from ui.chat import end_reason_text
-from ui.widgets import attempt, render_transcript, status_label
+from ui.widgets import attempt, render_transcript, report_panel, status_label
 
 client = state.client()
 
@@ -34,7 +34,7 @@ if sessions:
             for s in sessions
         ],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
     pick = st.selectbox(
         "Open a chat",
@@ -46,3 +46,7 @@ if sessions:
         st.subheader(f"{detail['trainee_ref']} with {detail['persona']['key']}")
         st.markdown(f"**{status_label(detail['status'])}**")
         render_transcript(detail["turns"])
+        if detail["status"] == "ended":
+            # Browsing must not start jobs: only the chat's own page asks for a report. A report
+            # that is missing here can still be requested with "Generate it again".
+            report_panel(client, detail["id"], ensure=False)

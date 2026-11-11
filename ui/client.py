@@ -217,3 +217,18 @@ class PodCClient:
         if "message" not in events or "done" not in events:
             raise ApiError(502, "the reply was cut off")  # safe to retry with the same ticket
         return TurnResult(reply=events["message"], done=events["done"])
+
+    # --- the report of an ended chat ---------------------------------------------------------
+
+    def report_status(self, session_id: str) -> dict:
+        """`state` is not_ended, generating or ready; admins get `can_download` once ready."""
+        return self._json("GET", f"/api/v1/sessions/{session_id}/report")
+
+    def request_report(self, session_id: str) -> dict:
+        """Make sure the report is being generated (safe to repeat). `queued` says whether this
+        call sent a new job; the API does not send a second one while the first is still running."""
+        return self._json("POST", f"/api/v1/sessions/{session_id}/report")
+
+    def download_report(self, session_id: str, fmt: str) -> bytes:
+        """The report file (`pdf`, `html` or `md`). Admins only."""
+        return self._call("GET", f"/api/v1/admin/sessions/{session_id}/report/{fmt}").content

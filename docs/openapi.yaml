@@ -1085,6 +1085,152 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/report:
+    get:
+      tags:
+      - reports
+      summary: Report Status
+      description: 'Where the report is: `not_ended`, `generating` or `ready`. Visible
+        to the chat''s owner and
+
+        admins; only admins are told they can download it.'
+      operationId: report_status_api_v1_sessions__session_id__report_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - reports
+      summary: Request Report
+      description: 'Make sure the report is being generated. Safe to repeat: a ready
+        report is left alone, and
+
+        a job that is probably still running is not sent a second time.'
+      operationId: request_report_api_v1_sessions__session_id__report_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/sessions/{session_id}/report/{fmt}:
+    get:
+      tags:
+      - reports
+      summary: Download Report
+      description: Download one report file (admins only).
+      operationId: download_report_api_v1_admin_sessions__session_id__report__fmt__get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Session Id
+      - name: fmt
+        in: path
+        required: true
+        schema:
+          enum:
+          - pdf
+          - html
+          - md
+          type: string
+          title: Fmt
+      - name: x-dev-user
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-User
+      - name: x-dev-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/admin/review-queue:
     get:
       tags:
@@ -1545,6 +1691,47 @@ components:
       - title
       - summary
       title: PublishedItem
+    ReportStatus:
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          title: Session Id
+        state:
+          type: string
+          enum:
+          - not_ended
+          - generating
+          - ready
+          title: State
+        model_configured:
+          type: boolean
+          title: Model Configured
+        can_download:
+          type: boolean
+          title: Can Download
+        formats:
+          items:
+            type: string
+            enum:
+            - pdf
+            - html
+            - md
+          type: array
+          title: Formats
+        queued:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Queued
+      type: object
+      required:
+      - session_id
+      - state
+      - model_configured
+      - can_download
+      - formats
+      title: ReportStatus
     ScenarioConfig:
       properties:
         id:

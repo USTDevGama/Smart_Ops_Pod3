@@ -32,20 +32,26 @@ def enqueue_demand_ingest(demand_id: UUID) -> None:
     ingest_demand.delay(str(demand_id))
 
 
-def enqueue_assessment(session_id: UUID) -> None:
+def send_assessment(session_id: UUID) -> None:
     """Queue `run_assessment` (ID only): it scores the chat and writes the report files.
 
-    With PODC_INGEST_INLINE=true it runs right here. The chat has already ended, so a failure to
-    score or to queue is logged and never raised back into the request.
+    With PODC_INGEST_INLINE=true it runs right here. Raises if the job cannot be queued or fails;
+    callers decide what to do with that.
     """
+    if get_settings().ingest_inline:
+        from app.scoring.pipeline import assess_and_render_in_new_session
+
+        assess_and_render_in_new_session(session_id)
+    else:
+        from app.workers.tasks import run_assessment
+
+        run_assessment.delay(str(session_id))
+
+
+def enqueue_assessment(session_id: UUID) -> None:
+    """`send_assessment` for the moment a chat ends. The chat has already ended, so a failure to
+    score or to queue is logged and never raised back into the request."""
     try:
-        if get_settings().ingest_inline:
-            from app.scoring.pipeline import assess_and_render_in_new_session
-
-            assess_and_render_in_new_session(session_id)
-        else:
-            from app.workers.tasks import run_assessment
-
-            run_assessment.delay(str(session_id))
+        send_assessment(session_id)
     except Exception:
         log.exception("could not start the assessment for session %s", session_id)

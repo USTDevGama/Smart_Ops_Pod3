@@ -4,7 +4,7 @@ import streamlit as st
 
 from ui import state
 from ui.chat import ChatController, end_reason_text
-from ui.widgets import attempt, flash, render_transcript, show_flash
+from ui.widgets import attempt, flash, render_transcript, report_panel, show_flash
 
 MAX_LEVEL = 4  # the character card's ladder has at most four steps
 
@@ -91,6 +91,8 @@ def _room(chat: ChatController) -> None:
 
     if chat.ended:
         st.info(f"This chat has ended. {end_reason_text(chat.end_reason)}")
+        # However it ended (the message limit, End the chat, or an admin), the report is made.
+        report_panel(client, chat.id)
         if st.button("Back to the start"):
             st.session_state.pop("chat")
             st.rerun()
