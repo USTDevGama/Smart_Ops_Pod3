@@ -9,9 +9,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Base OS certificates required for outbound HTTPS.
+# Base OS certificates required for outbound HTTPS, and a TrueType font: the report's PDF is drawn
+# with fpdf2, which needs a font file (app/reports/generator.py looks for DejaVu Sans; the slim
+# image has none, and every report would fail at the PDF step).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # The company proxy re-signs some HTTPS traffic (files.pythonhosted.org), so pip and uv cannot
@@ -42,6 +44,8 @@ COPY ui/ ui/
 COPY alembic/ alembic/
 COPY alembic.ini ./
 COPY samples/ samples/
+# The JSON schemas under docs/ are checked against the models by the tests.
+COPY docs/ docs/
 COPY tests/ tests/
 
 ENV PATH="/app/.venv/bin:$PATH"
