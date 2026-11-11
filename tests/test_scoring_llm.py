@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.db import models as m
+from app.llm.base import LLMError
 from app.llm.fake import FakeLLM
 from app.schemas import ScoringConfig, ScoringOutput
 from app.schemas.enums import TurnRole
@@ -239,6 +240,18 @@ def test_after_the_retry_it_gives_up_and_never_makes_a_third_call():
         score_session(llm, _config(), _transcript())
 
     assert len(llm.calls) == 2
+
+
+def test_a_failed_call_logs_its_reason_code_and_never_the_conversation(caplog):
+    class Refused:
+        def complete(self, request):
+            raise LLMError("the model call failed (HTTP 403)")
+
+    with caplog.at_level("WARNING"), pytest.raises(ScoringError):
+        score_session(Refused(), _config(), _transcript())
+
+    assert "the model call failed (HTTP 403)" in caplog.text
+    assert "supplier" not in caplog.text
 
 
 def test_the_error_never_contains_the_conversation():

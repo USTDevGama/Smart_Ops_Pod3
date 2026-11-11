@@ -15,7 +15,12 @@ permissions:
 
 env:
   IMAGE_NAME: pod-c-app
-  COMPOSE_FILE: deploy/compose.prod.yml
+  # Where the compose file, the .env and .last_good_tag live on the server, plus certs/corp-root.crt
+  # (the company proxy's root certificate, used only while building the image). A folder outside
+  # the checkout, so they survive from one run to the next. Set the repository variable DEPLOY_DIR
+  # to move it. docs/deployment.md lists what has to exist there first.
+  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/data/Smart_Ops_Pod3/deploy' }}
+  COMPOSE_FILE: ${{ vars.DEPLOY_DIR || '/data/Smart_Ops_Pod3/deploy' }}/compose.prod.yml
 
 jobs:
   deploy:
@@ -39,6 +44,31 @@ jobs:
           docker compose version
           docker network inspect shared-services >/dev/null
           docker volume inspect pod-c-storage >/dev/null
+
+      - name: Check the deploy folder
+        shell: bash
+        run: |
+          # Creates the folder if this user may; a root-owned parent makes this fail until an
+          # admin creates the folder.
+          mkdir -p "$DEPLOY_DIR" 2>/dev/null || true
+
+          if [ ! -d "$DEPLOY_DIR" ] || [ ! -w "$DEPLOY_DIR" ]; then
+            echo "::error::$DEPLOY_DIR is missing or not writable by $(whoami). Ask the server admin to create it and give it to this user."
+            exit 1
+          fi
+
+          mkdir -p "$DEPLOY_DIR/certs"
+
+          if [ ! -f "$DEPLOY_DIR/certs/corp-root.crt" ]; then
+            echo "::error::$DEPLOY_DIR/certs/corp-root.crt is missing. Put the company proxy's root certificate (PEM) there; it is not in git. Without it pip and uv cannot verify files.pythonhosted.org during the image build."
+            exit 1
+          fi
+
+      - name: Stage the corporate root for the build
+        shell: bash
+        run: |
+          mkdir -p ca
+          cp "$DEPLOY_DIR/certs/corp-root.crt" ca/corp-root.crt
 
       - name: Build test image
         shell: bash
@@ -68,7 +98,7 @@ jobs:
         run: |
           docker rmi "${IMAGE_NAME}-test:${IMAGE_TAG}" || true
 
-      - name: Create deployment environment
+      - name: Install compose file and environment
         shell: bash
         env:
           PODC_DATABASE_URL: ${{ secrets.PODC_DATABASE_URL }}
@@ -76,12 +106,21 @@ jobs:
           PODC_ANTHROPIC_API_KEY: ${{ secrets.PODC_ANTHROPIC_API_KEY }}
           PODC_ANTHROPIC_MODEL: ${{ secrets.PODC_ANTHROPIC_MODEL }}
           PODC_ANTHROPIC_GATEWAY_URL: ${{ secrets.PODC_ANTHROPIC_GATEWAY_URL }}
+          # Not secrets. Repository variables, so changing them needs no code change.
+          # PODC_ENV and PODC_DEV_AUTH_ENABLED go together: the app refuses dev login unless
+          # PODC_ENV is local or dev. Until real login (Zitadel) exists, "prod" + "false" means
+          # every API call except /healthz, /readyz and /api/v1/meta answers 401.
+          PODC_ENV: ${{ vars.PODC_ENV || 'prod' }}
+          PODC_DEV_AUTH_ENABLED: ${{ vars.PODC_DEV_AUTH_ENABLED || 'false' }}
+          # Claude Sonnet 5.5 rejects "disabled"; match the model above.
+          PODC_ANTHROPIC_THINKING_OFF: ${{ vars.PODC_ANTHROPIC_THINKING_OFF || 'between_tools' }}
         run: |
-          cat > deploy/.env <<EOF
-          UI_PORT=8090
+          cp deploy/compose.prod.yml "$DEPLOY_DIR/compose.prod.yml"
 
-          PODC_ENV=prod
-          PODC_DEV_AUTH_ENABLED=false
+          umask 077
+          cat > "$DEPLOY_DIR/.env" <<EOF
+          PODC_ENV=${PODC_ENV}
+          PODC_DEV_AUTH_ENABLED=${PODC_DEV_AUTH_ENABLED}
           PODC_INGEST_INLINE=false
 
           PODC_DATABASE_URL=${PODC_DATABASE_URL}
@@ -97,10 +136,11 @@ jobs:
           PODC_ANTHROPIC_API_KEY=${PODC_ANTHROPIC_API_KEY}
           PODC_ANTHROPIC_MODEL=${PODC_ANTHROPIC_MODEL}
           PODC_ANTHROPIC_GATEWAY_URL=${PODC_ANTHROPIC_GATEWAY_URL}
+          PODC_ANTHROPIC_THINKING_OFF=${PODC_ANTHROPIC_THINKING_OFF}
           PODC_ANTHROPIC_TIMEOUT_S=30
           EOF
 
-          chmod 600 deploy/.env
+          chmod 600 "$DEPLOY_DIR/.env"
 
       - name: Validate Compose
         shell: bash
@@ -133,45 +173,79 @@ jobs:
       - name: Verify deployment
         shell: bash
         run: |
+          compose() {
+            IMAGE_TAG="$IMAGE_TAG" docker compose -p pod-c -f "$COMPOSE_FILE" "$@"
+          }
+
+          # The API container is healthy, the API reaches its database (/readyz), and the worker
+          # answers a Celery ping (so it reached Redis). There is no UI to curl: the API is not
+          # published on the host.
           ok=0
 
-          for i in $(seq 1 30); do
-            if curl -fsS \
-              -o /dev/null \
-              "http://localhost:8090"; then
+          for i in $(seq 1 20); do
+            cid="$(compose ps -q api)"
+            health=""
+
+            if [ -n "$cid" ]; then
+              health="$(docker inspect --format '{{.State.Health.Status}}' "$cid" 2>/dev/null || true)"
+            fi
+
+            if [ "$health" = "healthy" ] \
+              && compose exec -T api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=5)" \
+              && compose exec -T worker celery -A app.workers.celery_app:celery_app inspect ping -t 5; then
               ok=1
               break
             fi
 
-            sleep 2
+            sleep 3
           done
 
           if [ "$ok" -ne 1 ]; then
-            echo "POD C UI failed health verification."
-            docker compose \
-              -p pod-c \
-              -f "$COMPOSE_FILE" \
-              ps
+            echo "POD C failed health verification."
+            compose ps
+            compose logs --tail=100
 
-            docker compose \
-              -p pod-c \
-              -f "$COMPOSE_FILE" \
-              logs --tail=100
+            # Put the last tag that passed this check back, if there is one.
+            last_good=""
+            if [ -f "$DEPLOY_DIR/.last_good_tag" ]; then
+              last_good="$(cat "$DEPLOY_DIR/.last_good_tag")"
+            fi
+
+            if [ -n "$last_good" ] && [ "$last_good" != "$IMAGE_TAG" ]; then
+              echo "Rolling back to image tag $last_good (database migrations are not rolled back)."
+              IMAGE_TAG="$last_good" \
+              docker compose \
+                -p pod-c \
+                -f "$COMPOSE_FILE" \
+                up -d
+            fi
 
             exit 1
           fi
+
+          echo "$IMAGE_TAG" > "$DEPLOY_DIR/.last_good_tag"
+
+      - name: Remove old images
+        shell: bash
+        run: |
+          # The root disk is small and shared by every pod: keep the three newest pod-c-app tags
+          # and the last good one. Only our own image is touched.
+          last_good="$(cat "$DEPLOY_DIR/.last_good_tag" 2>/dev/null || true)"
+
+          docker image ls "$IMAGE_NAME" --format '{{.Tag}}' | tail -n +4 | while read -r tag; do
+            if [ "$tag" = "$IMAGE_TAG" ] || [ "$tag" = "$last_good" ]; then
+              continue
+            fi
+
+            docker rmi "${IMAGE_NAME}:${tag}" || true
+          done
 
       - name: Deployment summary
         shell: bash
         run: |
           echo "POD C deployed with image tag: ${IMAGE_TAG}"
+          IMAGE_TAG="$IMAGE_TAG" \
           docker compose \
             -p pod-c \
             -f "$COMPOSE_FILE" \
             ps
-
-      - name: Cleanup deployment environment
-        if: always()
-        shell: bash
-        run: |
-          rm -f deploy/.env

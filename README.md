@@ -161,7 +161,7 @@ The program's seed pack is marked **UST CONFIDENTIAL: do not copy outside the pr
 - **Jobs must be safe to run twice,** and carry IDs only.
 
 ## Parked for later
-Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interface are deliberately out of scope for now.
+Real login and roles and cloud or Kubernetes deployment are deliberately out of scope for now. The Docker Compose deployment to the shared server is described in [docs/deployment.md](docs/deployment.md).
 
 ## Status and open questions
 **Done:** the five-table schema; persona, profile, demand and scenario-import APIs; session/chat APIs; PDF, DOCX and TXT text extraction (no OCR); the conversation agent (one model call per turn); the scoring model call; the post-session pipeline (scoring, code markers, question validity, `handled`, confidence); and a report generator for Markdown, sanitized HTML and PDF, saved to blob storage.

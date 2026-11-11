@@ -168,11 +168,15 @@ class LLMTurnEngine:
             except _Timeout:
                 log.warning("agent %s timed out (attempt %d)", purpose, attempt)
                 raise AgentError("the model call timed out") from None
-            except LLMError:
+            except LLMError as failure:
                 # The client raises LLMError for a failed call and for a schema mismatch alike, so
                 # they cannot be told apart yet. One retry is cheap for the second, and the
                 # deadline bounds the first.
                 code = "schema"
+                # The message is a reason code only (HTTP status, vault step, schema name), never
+                # the prompt or the model's text, so it is safe to log. It is what tells a 403
+                # from a reply that did not parse.
+                log.warning("agent %s attempt %d: %s", purpose, attempt, failure)
             else:
                 elapsed = time.monotonic() - started
                 log.info("agent %s ok (attempt %d, %.1fs)", purpose, attempt, elapsed)

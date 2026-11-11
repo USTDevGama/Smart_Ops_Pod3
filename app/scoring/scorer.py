@@ -55,9 +55,11 @@ def score_session(
             _check(output, config, transcript)
         except _Rejected as bad:
             code = bad.code
-        except LLMError:
+        except LLMError as failure:
             # The client raises LLMError for a failed call and for a schema mismatch alike.
             code = "schema"
+            # A reason code only (never the prompt or the model's text), so it is safe to log.
+            log.warning("scoring attempt %d: %s", attempt, failure)
         else:
             log.info("scoring ok (attempt %d, prompt %s)", attempt, prompts.PROMPT_VERSION)
             return output
