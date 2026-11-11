@@ -90,6 +90,15 @@ def test_uses_the_plain_model_name_when_not_on_azure():
     assert stub.calls[0]["model"] == "model-direct"
 
 
+def test_thinking_off_shape_follows_the_setting_not_a_hardcoded_default():
+    """Claude Sonnet 5.5 rejects {"type": "disabled"} and needs "between_tools" instead; which
+    shape is correct depends on which model the deployment points at, so it must be settable."""
+    stub = StubClient(_message('{"ok": true, "word": "x"}'))
+    settings = _settings(anthropic_thinking_off="between_tools")
+    ProviderLLM(settings, client=stub).complete(_request())
+    assert stub.calls[0]["thinking"] == {"type": "between_tools"}
+
+
 def test_gateway_url_wins_over_azure_and_uses_the_plain_anthropic_client(monkeypatch):
     """An internal Anthropic-compatible gateway: plain `Anthropic(base_url=...)`, not Foundry."""
     built: dict = {}

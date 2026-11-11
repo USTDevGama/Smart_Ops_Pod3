@@ -10,9 +10,11 @@ an `ssh -D` tunnel to a host that can reach it).
 
 Choices that are easy to get wrong:
   * `request.temperature` is NOT sent. The current Claude models reject sampling parameters.
-  * `thinking` is sent as disabled. The agent asks for a short JSON reply under a tight timeout,
-    and hidden reasoning would eat `max_tokens` and the wait. (Claude Sonnet 5.5 and later reject
-    `disabled`; if the deployment moves to one of those, send `{"type": "between_tools"}`.)
+  * `thinking` is sent as off. The agent asks for a short JSON reply under a tight timeout, and
+    hidden reasoning would eat `max_tokens` and the wait. Which shape means "off" is model-
+    generation-specific: most Claude models accept `{"type": "disabled"}`, but Claude Sonnet 5.5
+    rejects it and needs `{"type": "between_tools"}` instead - set `PODC_ANTHROPIC_THINKING_OFF`
+    to match whatever model the deployment actually points at.
   * Errors and logs carry reason codes only (HTTP status, error type, schema name), never the
     prompt or the model's text (BR-13).
 """
@@ -91,7 +93,7 @@ class ProviderLLM:
             "max_tokens": request.max_tokens,
             "system": request.system,
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
-            "thinking": {"type": "disabled"},
+            "thinking": {"type": self._settings.anthropic_thinking_off},
         }
 
     def _create(self, client: Any, request: LLMRequest) -> Any:
