@@ -10,7 +10,8 @@ import pytest
 pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
-from tests.ui.support import clients, output, stage  # noqa: E402
+from app.api import reports as reports_api  # noqa: E402
+from tests.ui.support import clients, output, stage, write_report  # noqa: E402
 from ui.persona_form import default_persona  # noqa: E402
 
 UI = Path(__file__).resolve().parents[2] / "ui"
@@ -192,3 +193,117 @@ def test_the_review_page_shows_the_score_notes_to_an_admin(api, engine):
     assert not at.exception
     assert at.header[0].value == "Review chats"
     assert any("Score notes" in e.label for e in at.expander)
+
+
+# --- the report of an ended chat ------------------------------------------------------------------
+
+
+def click(at: AppTest, label: str) -> None:
+    next(b for b in at.button if b.label == label).click()
+    at.run()
+
+
+def end_by_hand(api, engine, anna, monkeypatch) -> tuple[AppTest, list[str]]:
+    """Anna starts a chat in the page and ends it with the button. Returns the page and the
+    session ids the page asked the API to make a report for."""
+    engine([output()])
+    asked: list[str] = []
+    real = anna.request_report
+    monkeypatch.setattr(anna, "request_report", lambda sid: (asked.append(sid), real(sid))[1])
+
+    at = page("trainee_chat.py", anna).run()
+    click(at, "Start the chat")
+    click(at, "End the chat")
+    return at, asked
+
+
+def downloads(at: AppTest) -> list[str]:
+    return [b.proto.label for b in at.get("download_button")]
+
+
+def test_ending_a_chat_by_hand_asks_for_its_report(api, engine, monkeypatch):
+    _, anna, _ = stage(api)
+    at, asked = end_by_hand(api, engine, anna, monkeypatch)
+
+    assert not at.exception
+    assert "This chat has ended" in texts(at.info)
+    assert "Report" in [s.value for s in at.subheader]
+    assert asked == [anna.list_sessions()[0]["id"]]  # asked once, for this chat
+
+
+def test_without_a_model_the_page_says_what_to_configure(api, engine, monkeypatch):
+    _, anna, _ = stage(api)
+    at, _ = end_by_hand(api, engine, anna, monkeypatch)  # the default provider is the fake one
+
+    assert "needs a scoring model" in texts(at.warning)
+    assert "PODC_LLM_PROVIDER" in texts(at.warning)
+
+
+def test_a_report_still_being_made_shows_progress_and_is_not_started_twice(
+    api, engine, monkeypatch
+):
+    monkeypatch.setattr(reports_api, "_model_configured", lambda: True)
+    sent: list = []
+    monkeypatch.setattr(reports_api, "send_assessment", sent.append)
+    _, anna, _ = stage(api)
+
+    at, asked = end_by_hand(api, engine, anna, monkeypatch)
+
+    assert "being generated" in texts(at.info)
+    assert len(asked) == 1
+    assert sent == []  # the chat's own end already queued the job: no second one
+
+
+def test_a_trainee_is_told_the_report_exists_but_cannot_download_it(api, engine, monkeypatch):
+    _, anna, _ = stage(api)
+    at, _ = end_by_hand(api, engine, anna, monkeypatch)
+    write_report(api, anna.list_sessions()[0]["id"])
+
+    at.run()
+
+    assert not at.exception
+    assert "has gone to an admin for review" in texts(at.success)
+    assert downloads(at) == []
+
+
+def test_an_admin_sees_the_download_buttons_when_the_report_is_ready(api, engine):
+    admin, anna, profile_id = stage(api)
+    engine([output()])
+    session = anna.start_session("verma-strict", profile_id)
+    anna.end_session(session["id"])
+    write_report(api, session["id"])
+
+    at = page("sessions_review.py", admin).run()
+
+    assert not at.exception
+    assert "The report is ready." in texts(at.success)
+    assert downloads(at) == ["Download PDF", "Download HTML", "Download Markdown"]
+
+
+def test_browsing_chats_does_not_start_report_jobs(api, engine, monkeypatch):
+    monkeypatch.setattr(reports_api, "_model_configured", lambda: True)
+    sent: list = []
+    monkeypatch.setattr(reports_api, "send_assessment", sent.append)
+    admin, anna, profile_id = stage(api)
+    engine([output()])
+    session = anna.start_session("verma-strict", profile_id)
+    anna.end_session(session["id"])
+    asked: list = []
+    monkeypatch.setattr(admin, "request_report", lambda sid: asked.append(sid))
+
+    at = page("sessions_review.py", admin).run()
+
+    assert not at.exception
+    assert "being generated" in texts(at.info)
+    assert asked == [] and sent == []  # only the "Generate it again" button asks
+
+
+def test_a_chat_still_going_has_no_report_panel_in_the_review(api, engine):
+    admin, anna, profile_id = stage(api)
+    engine([output()])
+    anna.start_session("verma-strict", profile_id)
+
+    at = page("sessions_review.py", admin).run()
+
+    assert not at.exception
+    assert "Report" not in [s.value for s in at.subheader]

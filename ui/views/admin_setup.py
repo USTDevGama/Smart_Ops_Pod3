@@ -148,7 +148,7 @@ with situations_tab:
                 }
             )
     if rows:
-        st.dataframe(rows, hide_index=True, use_container_width=True)
+        st.dataframe(rows, hide_index=True, width="stretch")
 
 
 # --- the demand document ----------------------------------------------------------------------

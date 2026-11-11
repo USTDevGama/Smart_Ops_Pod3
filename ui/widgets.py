@@ -1,11 +1,12 @@
 """Small Streamlit pieces the pages share."""
 
 from collections.abc import Callable
+from functools import partial
 
 import pandas as pd
 import streamlit as st
 
-from ui.client import ApiError
+from ui.client import ApiError, PodCClient
 from ui.persona_form import persona_config
 
 ICONS = {
@@ -47,22 +48,119 @@ def show_flash() -> None:
         getattr(st, kind)(message)
 
 
-def live(fetch: Callable[[], dict], render: Callable[[dict], None], interval: float = 2.0) -> None:
-    """Show a record, and refresh it every few seconds while the reader is still working on it.
+def reader_working(row: dict) -> bool:
+    return row["status"] in STILL_WORKING
+
+
+def live(
+    fetch: Callable[[], dict],
+    render: Callable[[dict], None],
+    interval: float = 2.0,
+    is_working: Callable[[dict], bool] = reader_working,
+) -> None:
+    """Show a record, and refresh it every few seconds while it is still being worked on.
 
     When it finishes, the whole page reruns once so the refreshing stops.
     """
     first = fetch()
-    working = first["status"] in STILL_WORKING
+    working = is_working(first)
 
     @st.fragment(run_every=interval if working else None)
     def view() -> None:
         row = fetch() if working else first
         render(row)
-        if working and row["status"] not in STILL_WORKING:
+        if working and not is_working(row):
             st.rerun()
 
     view()
+
+
+REPORT_FORMATS = [
+    ("pdf", "PDF", "application/pdf"),
+    ("html", "HTML", "text/html"),
+    ("md", "Markdown", "text/markdown"),
+]
+NO_MODEL_HELP = (
+    "A report needs a scoring model, and this server has none configured. "
+    "Set `PODC_LLM_PROVIDER` (and the model's keys) in `.env`, restart the API, "
+    "and end a chat again."
+)
+
+
+def report_panel(client: PodCClient, session_id: str, ensure: bool = True) -> None:
+    """The report of an ended chat: make sure it is being generated, follow it until it is ready,
+    and offer the download to admins (trainees only learn that it exists).
+
+    `ensure` asks the API to start the report when the chat is opened, once per visit. The API
+    does not send a second job while the first is still running, so asking is always safe; it is
+    what makes sure a report exists however the chat ended and even if the first job was lost.
+    """
+    problem_key = f"report-problem-{session_id}"
+    asked_key = f"report-asked-{session_id}"
+    if ensure and asked_key not in st.session_state:
+        st.session_state[asked_key] = True
+        try:
+            client.request_report(session_id)
+        except ApiError as exc:
+            st.session_state[problem_key] = exc.detail
+
+    def fetch() -> dict:
+        try:
+            return client.report_status(session_id)
+        except ApiError as exc:
+            return {"state": "error", "detail": exc.detail}
+
+    def render(row: dict) -> None:
+        state = row["state"]
+        if state == "ready" and row["can_download"]:
+            st.success("The report is ready.")
+            available = [f for f in REPORT_FORMATS if f[0] in row["formats"]]
+            for column, (fmt, label, mime) in zip(
+                st.columns(len(available)), available, strict=True
+            ):
+                column.download_button(
+                    f"Download {label}",
+                    # Fetched only when the button is clicked, not on every rerun.
+                    data=partial(client.download_report, session_id, fmt),
+                    file_name=f"report-{session_id[:8]}.{fmt}",
+                    mime=mime,
+                    key=f"download-{session_id}-{fmt}",
+                    on_click="ignore",
+                    icon=":material/download:",
+                )
+        elif state == "ready":
+            st.success("The report is ready and has gone to an admin for review.")
+        elif state == "generating":
+            if not row["model_configured"]:
+                st.warning(NO_MODEL_HELP)
+            else:
+                st.info(
+                    "The report is being generated: the chat is scored first, which can take a "
+                    "minute or two. This updates by itself."
+                )
+                if st.session_state.get(problem_key):
+                    st.warning(st.session_state[problem_key])
+                if st.button(
+                    "Generate it again", key=f"report-again-{session_id}", type="tertiary"
+                ):
+                    try:
+                        sent = client.request_report(session_id)
+                    except ApiError as exc:
+                        st.session_state[problem_key] = exc.detail
+                    else:
+                        st.session_state.pop(problem_key, None)
+                        st.toast(
+                            "Started a new report job."
+                            if sent.get("queued")
+                            else "A report job is already running."
+                        )
+        elif state == "error":
+            st.error(row["detail"])
+        else:
+            st.caption("The report appears once the chat has ended.")
+
+    st.subheader("Report")
+    live(fetch, render, interval=3.0, is_working=lambda row: row["state"] == "generating")
 
 
 def show_extracted(content: dict | None) -> None:

@@ -58,3 +58,16 @@ def stage(api, persona: dict | None = None, http=None):
     with api.factory() as db:
         pipeline.ingest_profile(db, api.queued[-1], api.store)
     return admin, anna, resume.row["id"]
+
+
+REPORT_FILES = {
+    "pdf": ("report.pdf", b"%PDF-1.4 a made-up report"),
+    "html": ("report.html", b"<html>made-up report</html>"),
+    "md": ("report.md", b"# Report\n\nOverall score: 47.5"),
+}
+
+
+def write_report(api, session_id: str) -> None:
+    """Put the three report files where the post-session job would have put them."""
+    for filename, data in REPORT_FILES.values():
+        api.store.save(data, name=f"reports/{session_id}/{filename}")

@@ -93,7 +93,20 @@ class TurnEngine(Protocol):
 `max_turns` counts trainee replies; each reply completes one client-question/trainee-answer exchange.
 
 ### 3.4 Planned (Disha's area): 501 for now
-Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers 501 in the standard shape until built: `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `GET /integration/signals`. There are no assessment or report endpoints: the finished assessment and report files are saved to blob storage under `reports/<session_id>/` when a session ends, and there is no separate assessment table or ID. Remove a line from `app/api/planned.py` when the real endpoint lands.
+Listed in `docs/openapi.yaml` so the UI can code against the paths; each answers 501 in the standard shape until built: `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `GET /integration/signals`. There is no assessment endpoint: the finished assessment and report files are saved to blob storage under `reports/<session_id>/` when a session ends, and there is no separate assessment table or ID. Remove a line from `app/api/planned.py` when the real endpoint lands.
+
+### 3.5 The report (`app/api/reports.py`)
+The report files are written by the post-session job; these endpoints only read the blob store (they do not load the scoring or PDF code) and, on request, send that job again.
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /sessions/{id}/report` | owner, admin | `state`: `not_ended`, `generating` (ended, no PDF yet) or `ready`. Also `model_configured` (false with the fake provider: no report can appear), `can_download` and `formats` (admins only, once ready) |
+| `POST /sessions/{id}/report` | owner, admin | Make sure the report is being generated. 409 if the chat has not ended or no model is configured. A ready report is left alone (200). A chat that ended less than 5 minutes ago already has its job queued or running, so no second one is sent (202, `queued: false`); after that a missing report means the job was lost, and it is sent again (202, `queued: true`). With `PODC_INGEST_INLINE=true` the work runs inside the request. 503 if the job cannot be queued, 502 if the inline run fails (the error type only, never chat text) |
+| `GET /admin/sessions/{id}/report/{pdf\|html\|md}` | admin | The file, as an attachment. 404 until the report is ready |
+
+Only admins can download: the report carries the suggested mark, which is for human review. Whichever way a chat ends (the trainee, an admin, or the message limit), the chat's end hook queues the job; the UI also calls `POST` once when it opens an ended chat, so a report exists even if that first job was lost.
+
+**Where the files go.** `get_blob_store()` uses `PODC_BLOB_DIR` when files can be written there, and otherwise a folder named `podc-blobs` in the system's temp directory (logged once), so a missing or read-only folder never loses a report. It is the same folder for every process on the machine, so the API and the worker find each other's files. Azure Blob would replace this behind the same `BlobStore` methods.
 
 ### 3.5 Already built
 `GET /healthz`, `/readyz`, `/api/v1/meta`.

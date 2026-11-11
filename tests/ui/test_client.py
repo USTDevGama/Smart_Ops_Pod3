@@ -114,3 +114,66 @@ def test_the_same_resume_again_is_reported_as_reused(api):
     second = anna.upload_profile("resume.txt", b"Backend engineer.")
     assert first.reused is False and second.reused is True
     assert second.row["id"] == first.row["id"]
+
+
+# --- the report of an ended chat ------------------------------------------------------------------
+
+
+def test_the_report_status_follows_the_chat(api, engine):
+    from tests.ui.support import write_report
+
+    admin, anna, profile_id = stage(api)
+    engine([output()])
+    session = anna.start_session("verma-strict", profile_id)
+    assert anna.report_status(session["id"])["state"] == "not_ended"
+
+    anna.end_session(session["id"])
+    assert anna.report_status(session["id"])["state"] == "generating"
+
+    write_report(api, session["id"])
+    assert anna.report_status(session["id"]) | {} == {
+        "session_id": session["id"],
+        "state": "ready",
+        "model_configured": False,
+        "can_download": False,  # trainees are told it exists, not given the file
+        "formats": [],
+        "queued": None,
+    }
+    assert admin.report_status(session["id"])["formats"] == ["pdf", "html", "md"]
+
+
+def test_only_admins_can_download_the_report(api, engine):
+    from tests.ui.support import REPORT_FILES, write_report
+
+    admin, anna, profile_id = stage(api)
+    engine([output()])
+    session = anna.start_session("verma-strict", profile_id)
+    anna.end_session(session["id"])
+    write_report(api, session["id"])
+
+    assert admin.download_report(session["id"], "pdf") == REPORT_FILES["pdf"][1]
+    assert admin.download_report(session["id"], "md") == REPORT_FILES["md"][1]
+    with pytest.raises(ApiError) as info:
+        anna.download_report(session["id"], "pdf")
+    assert info.value.status == 403 and not info.value.retryable
+
+
+def test_asking_for_a_report_without_a_model_says_what_to_configure(api, engine):
+    _, anna, profile_id = stage(api)
+    engine([output()])
+    session = anna.start_session("verma-strict", profile_id)
+    anna.end_session(session["id"])
+
+    with pytest.raises(ApiError) as info:
+        anna.request_report(session["id"])  # the default provider is the fake one
+    assert info.value.status == 409 and "PODC_LLM_PROVIDER" in info.value.detail
+
+
+def test_asking_for_a_report_before_the_chat_ends_is_refused(api, engine):
+    _, anna, profile_id = stage(api)
+    engine([output()])
+    session = anna.start_session("verma-strict", profile_id)
+
+    with pytest.raises(ApiError) as info:
+        anna.request_report(session["id"])
+    assert info.value.status == 409 and "not ended" in info.value.detail

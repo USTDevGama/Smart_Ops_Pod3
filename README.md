@@ -56,7 +56,7 @@ Python 3.12 | FastAPI | LangGraph (turn graph and scoring graph) | PostgreSQL + 
 | Folder | Purpose | Owner |
 |---|---|---|
 | `app/ingest/` | profile and demand upload endpoints (`router.py`, `demand_router.py`) and text extraction (`pipeline.py`, `extract.py`, `pdf_text.py`, `docx_text.py`; scanned PDFs/OCR are not supported) | endpoints: **Dev A**; reading the files: **Kedar** |
-| `app/reports/` | report generation as Markdown, sanitized HTML and PDF; the finished files are saved to blob storage (no report API) | **Disha** |
+| `app/reports/` | report generation as Markdown, sanitized HTML and PDF; the finished files are saved to blob storage; they are read and downloaded through `app/api/reports.py` | **Disha** (endpoints: **Kedar**) |
 | `app/sessions/` | session and chat endpoints, saving turns, the turn limit, the one-step escalation clamp | **Dev B** |
 | `app/agent/` | the turn engine: how one client reply is produced (`TurnEngine`; `placeholder.py` is a temporary stand-in) | **Shubra** |
 | `app/scoring/` | criterion scoring and confidence processor; review workflow remains | **Disha** |
@@ -103,7 +103,9 @@ Sign in on the left with a name and a role (the dev login: the pair is sent as t
 - **Admin, "Set the stage":** write the character card (a form, validated by the API), publish it (a published version never changes; later edits become a new version), load the situations (one JSON batch) and upload the demand document, then watch it being read.
 - **Admin, "Review chats":** every chat in order, with the score notes on each answer, which trainees never see.
 - **Trainee, "My resume":** upload a PDF, DOCX or TXT file and watch it go `queued` -> `extracting` -> `ready`; the extracted text is shown.
-- **Trainee, "Chat":** pick the client and a ready resume and start; the client speaks first. The page shows the client's mood level and the message count. Every message gets a ticket (the `Idempotency-Key`) first: if the connection drops or the agent cannot reply, nothing is counted, the message stays on screen and "Send it again" reuses the same ticket, so it can never count twice. When the chat ends, the page says why.
+- **Trainee, "Chat":** pick the client and a ready resume and start; the client speaks first. The page shows the client's mood level and the message count. Every message gets a ticket (the `Idempotency-Key`) first: if the connection drops or the agent cannot reply, nothing is counted, the message stays on screen and "Send it again" reuses the same ticket, so it can never count twice. When the chat ends, the page says why, and a **Report** panel appears, however the chat ended (the message limit, "End the chat", or an admin). It asks the API to make sure the report is being generated (the API never starts a second job while the first is still running), follows it until it is ready, and shows **download buttons (PDF, HTML, Markdown) to admins**. A trainee is told that the report exists and has gone to an admin; the report holds the suggested mark, so only admins can download it. The "Review chats" page shows the same panel for an ended chat, with a "Generate it again" button if a report never appeared.
+
+Producing a report needs a scoring model. With the default `PODC_LLM_PROVIDER=fake` (no `.env`) no report can be made, and the panel says so and what to set.
 
 `uv run pytest tests/ui` tests the client and the chat rules against the real API, and runs every page headlessly with Streamlit's `AppTest` (those page tests skip when Streamlit is not installed).
 
@@ -115,6 +117,7 @@ All paths start with `/api/v1`. The full, always-current list is `docs/openapi.y
 | Profiles | `POST /profiles` (202, then poll), `GET /profiles`, `GET /profiles/{id}`, `DELETE /profiles/{id}` | owner, admin |
 | Demand document | `POST /admin/demand` (202, then poll), `GET /admin/demand`, `GET /admin/demand/{id}`, `DELETE /admin/demand/{id}` | admin |
 | Chat | `POST /sessions`, `GET /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/turns` (needs an `Idempotency-Key` header; replies as a server-sent event stream), `POST /sessions/{id}/end` | owner, admin |
+| Report | `GET /sessions/{id}/report` (state: `not_ended`, `generating` or `ready`; owner, admin), `POST /sessions/{id}/report` (make sure it is being generated: safe to repeat, never sends a second job while the first is probably running; owner, admin), `GET /admin/sessions/{id}/report/{pdf\|html\|md}` (download, admin only) | owner, admin |
 | Planned (answer 501) | `GET /admin/review-queue`, `POST /admin/sessions/{id}/review`, `GET /integration/signals` | review owner |
 Errors always look like `{"type", "title", "status", "detail"}`. For local work without Redis, set `PODC_INGEST_INLINE=true` so an upload is processed inside the request.
 
@@ -163,7 +166,7 @@ Real login and roles, deployment (cloud, Kubernetes, CI/CD) and the user interfa
 ## Status and open questions
 **Done:** the five-table schema; persona, profile, demand and scenario-import APIs; session/chat APIs; PDF, DOCX and TXT text extraction (no OCR); the conversation agent (one model call per turn); the scoring model call; the post-session pipeline (scoring, code markers, question validity, `handled`, confidence); and a report generator for Markdown, sanitized HTML and PDF, saved to blob storage.
 
-**Next:** how the admin or Pod D gets the saved report files; the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
+**Next:** how Pod D gets the saved report files (admins can now download them through the report endpoints); the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
 
 **Open questions for the TPM:**
 - Is the outgoing `roleplay-result` contract fine with `scenario_id` now optional? The agent picks the scenario and nothing saves it, so we cannot fill it.
