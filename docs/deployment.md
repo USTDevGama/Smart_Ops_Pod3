@@ -19,6 +19,7 @@ It runs on every push to `main` (or by hand: Actions, "Deploy POD C", Run workfl
 
 | Step | What happens |
 |---|---|
+| Checkout | A plain `git fetch` of the pushed commit with the job's own read-only token, **not** the `actions/checkout` action. That action is downloaded from `codeload.github.com`, which the company proxy blocks from the VM (the run stopped at "Set up job" with `Access denied`). Git talks to `github.com`, which works. The token is never written to `.git/config`, and the reused workspace is cleaned. Do not add a `uses:` step for another action without checking it can be downloaded from the VM. |
 | Checks | Docker, the `shared-services` network and the `pod-c-storage` volume must exist. The deploy folder is created if the runner user may, and `certs/corp-root.crt` must be in it. A missing one fails the run at once, before any build. |
 | Test and build | Copies the proxy's root certificate into the build, builds the test image and runs `pytest` inside it, then builds the runtime image tagged with the short commit id. |
 | Install | Copies `compose.prod.yml` to the deploy folder and writes `.env` there (mode 600) from the GitHub secrets and variables below. |

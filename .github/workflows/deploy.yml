@@ -30,7 +30,25 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Not actions/checkout: that is a downloaded action, and the company proxy blocks
+          # codeload.github.com (the runner stops at "Set up job" with "Access denied"). Plain git
+          # over github.com works. The job's own read-only token is passed for this one command
+          # and is never written to .git/config.
+          server="${GITHUB_SERVER_URL:-https://github.com}"
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+
+          git init -q .
+          git remote remove origin 2>/dev/null || true
+          git remote add origin "$server/$GITHUB_REPOSITORY.git"
+          git -c "http.extraheader=AUTHORIZATION: basic $auth" fetch -q --depth 1 origin "$GITHUB_SHA"
+          git checkout -q -f FETCH_HEAD
+          # The workspace is reused between runs: drop anything left from the last one.
+          git clean -ffdxq
 
       - name: Set image tag
         shell: bash
