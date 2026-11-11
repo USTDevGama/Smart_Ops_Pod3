@@ -5,6 +5,7 @@ validates its exchange citations and combines it with the scoring criteria and v
 to produce an `Assessment`.
 """
 
+from app.scoring.pod_d import build_pod_d_result
 from app.scoring.processor import ScoringValidationContext, build_assessment
 
-__all__ = ["ScoringValidationContext", "build_assessment"]
+__all__ = ["ScoringValidationContext", "build_assessment", "build_pod_d_result"]

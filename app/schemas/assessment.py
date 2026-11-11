@@ -1,6 +1,6 @@
 """Raw scoring-model output and code-validated assessment shapes."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -101,39 +101,17 @@ class Assessment(BaseModel):
         return 100 * sum(item.points * item.weight for item in self.criteria)
 
 
-# --- The program's result format ("roleplay-result"), what leaves the pod --------------------
+# --- The Pod D result contract ---------------------------------------------------------------
 
 
-class ResultTurn(BaseModel):
-    turn: int = Field(ge=1)  # 1-based position of a message; client and trainee count separately
-    role: Literal["client", "trainee"]
-    text: str
-
-
-class ResultBody(BaseModel):
-    pushback_peak_step: int = Field(ge=1, le=4)
-    handled: Literal["yes", "partly", "no"]
-    strengths: list[str] = Field(default_factory=list)
-    gaps: list[str]
-    evidence_turns: list[int]
+PodDGoalId = Literal["G06", "G08", "G10"]
+PodDGoalScore = Annotated[float, Field(ge=0, le=5)]
 
 
 class RoleplayResult(BaseModel):
-    """Outgoing Pod D contract, distinct from the internal criterion-scoring output."""
+    """Only the authenticated trainee id and deterministic Pod D goal scores leave the pod."""
 
-    contract: Literal["roleplay-result"] = "roleplay-result"
-    session_id: str
-    # The agent picks the scenario and nothing saves it, so the pod cannot always fill this.
-    scenario_id: str | None = None
-    persona_version: str
-    turns: list[ResultTurn] = Field(min_length=1)
-    result: ResultBody
-    human_review_required: bool = True
+    model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="after")
-    def _evidence_points_at_real_turns(self) -> "RoleplayResult":
-        existing = {turn.turn for turn in self.turns}
-        missing = [number for number in self.result.evidence_turns if number not in existing]
-        if missing:
-            raise ValueError(f"evidence_turns refer to turns that do not exist: {missing}")
-        return self
+    trainee_id: str = Field(min_length=1)
+    C_scores: dict[PodDGoalId, PodDGoalScore] = Field(min_length=3, max_length=3)

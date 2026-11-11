@@ -3,8 +3,6 @@
 from app.schemas.assessment import (
     Assessment,
     CriterionAssessment,
-    ResultBody,
-    ResultTurn,
     RoleplayResult,
     ScoringCriterion,
     ScoringEvidence,
@@ -34,8 +32,6 @@ __all__ = [
     "Evaluation",
     "HandledCutoffs",
     "PersonaConfig",
-    "ResultBody",
-    "ResultTurn",
     "RoleplayResult",
     "ScenarioConfig",
     "ScoringCriterion",

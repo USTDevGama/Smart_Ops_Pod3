@@ -365,7 +365,7 @@ This session made 4 calls: 1 opening, 2 turns, 1 score.
 | `created_at` | timestamp | when | `09:41` | `10:12` |
 
 ### 4.13 What leaves the system: not a table
-The outgoing result (`RoleplayResult`) is **not stored as its own table**. It is built on demand from `turn`, `assessment` and `review`. For this example it is `samples/results/vendor_delay_result.json`: `handled: partly` (3 of 4 checklist items met), `pushback_peak_step: 3`, one gap ("No change offered to avoid a repeat") and `evidence_turns: [4]`, which is `idx` 3 plus 1.
+The outgoing result (`RoleplayResult`) is **not stored as its own table**. It is built from the validated assessment and the authenticated trainee id. `samples/results/vendor_delay_result.json` shows its small payload: `trainee_id` plus `C_scores` for G06, G08 and G10. The goal scores are mapped deterministically from criterion points and scaled to 0-5.
 
 ### 4.14 Why we keep these in the database, who uses them, and the intuition
 
@@ -480,9 +480,7 @@ Used by both the tables and the schemas, so they always agree.
 **What leaves the system (the program's "roleplay-result" format):**
 | Class | What it is | Rules |
 |---|---|---|
-| `ResultTurn` | one message: number from 1, role `client` or `trainee`, text | |
-| `ResultBody` | pushback_peak_step 1 to 4, `handled` (yes / partly / no), strengths, gaps, evidence_turns | `handled` values are an **assumption** |
-| `RoleplayResult` | the whole document | **every evidence turn must exist**, so made-up evidence is rejected on the way out too |
+| `RoleplayResult` | `trainee_id` and `C_scores` for G06, G08 and G10 | Scores map C1+C3 to G06, C2 to G08, C4 to G10, then scale weighted points from 0-1 to 0-5 |
 
 ### `__init__.py` (47 lines)
 Re-exports all of the above so other code writes `from app.schemas import PersonaConfig`.
@@ -545,7 +543,7 @@ Loads the confidential seed pack from the folder in `PODC_SEED_DIR`: `load_perso
 |---|---|
 | `personas/ms_verma_strict.json` | "Ms. Verma", finance head at a fictional logistics company; 4-step ladder |
 | `scenarios/vendor_delay.json` | VD-01: a supplier module ten days late; 3 objections; 4-item checklist |
-| `results/vendor_delay_result.json` | an example result in the program's format, 5 messages |
+| `results/vendor_delay_result.json` | an example Pod D payload with trainee id and goal scores |
 | `scoring/default.json` | three dimensions, weights 0.4 / 0.3 / 0.3, alpha 0.4 (all placeholders) |
 | `proposals/billing_migration.txt` | a short proposal with deliberate weak points |
 

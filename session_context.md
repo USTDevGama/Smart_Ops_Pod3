@@ -36,8 +36,7 @@ an explicit later decision.
 - The weights, cutoffs, margin, penalty, cap, and confidence bands are provisional, not
   calibrated production values.
 - Report/scoring exchange numbering is one client question plus its trainee reply. The outgoing
-  `roleplay-result` contract numbers each message separately; these numbering systems must not
-  be mixed.
+  Pod D result contains goal scores and no transcript turn numbers.
 
 ## What the scoring/report commit added
 
@@ -154,8 +153,9 @@ reliably identify the chosen scenario.
 - Assessment/report artifacts are not persisted or uploaded to Azure. The report generator
   returns artifacts in memory.
 - The external `RoleplayResult` contract and the internal criterion-scoring format are distinct.
-  Any handoff to Pod D needs an explicit mapping and must preserve the correct turn-numbering
-  convention.
+  `build_pod_d_result` maps C1+C3 to G06, C2 to G08, and C4 to G10 using criterion weights,
+  then scales points from 0-1 to 0-5. The helper requires an authenticated trainee ID; delivery
+  to Pod D is not wired.
 
 ## Repository status at this snapshot
 

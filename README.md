@@ -24,7 +24,7 @@ Pod C's agent for the Multi-Agent Training Evaluation Platform ("The Tough Clien
 2. **Profile.** A trainee uploads their resume (PDF, DOCX or TXT). The ingestion pipeline stores extracted content as JSON. The client uses the profile together with the shared demand and selected scenario.
 3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit or when someone ends it.
 4. **The mark.** When the chat ends, a background job (`run_assessment`) sends the finished chat to a scoring model call that rates the trainee on four fixed weighted criteria and cites real exchanges. Plain code validates the output, derives `handled`, checks the model's evidence against code markers (from the saved per-turn evaluations, the resume and the demand), applies weights and cutoffs, and computes confidence. The result is saved as one JSON snapshot in blob storage.
-5. **Report and handoff.** The same job then turns that snapshot into Markdown, sanitized HTML and PDF files under `reports/<session_id>/` in blob storage. If the snapshot already exists (a retry), it skips the model call and only renders. Review APIs and Azure storage are not wired. The separate **roleplay-result** schema describes the external Pod D contract; it is not the scoring LLM response format.
+5. **Report and handoff.** The same job then turns that snapshot into Markdown, sanitized HTML and PDF files under `reports/<session_id>/` in blob storage. If the snapshot already exists (a retry), it skips the model call and only renders. Review APIs and Azure storage are not wired. The separate **roleplay-result** schema describes the external Pod D contract; `build_pod_d_result` maps validated criterion points to goal scores deterministically, without another LLM call. Delivery to Pod D is not wired and requires the authenticated trainee ID.
 
 ## Where it fits in the platform
 ```
@@ -169,9 +169,7 @@ Real login and roles and cloud or Kubernetes deployment are deliberately out of 
 **Next:** how Pod D gets the saved report files (admins can now download them through the report endpoints); the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
 
 **Open questions for the TPM:**
-- Is the outgoing `roleplay-result` contract fine with `scenario_id` now optional? The agent picks the scenario and nothing saves it, so we cannot fill it.
-- What are the allowed values of `handled` in the result (the seed only shows "partly")? We assume yes / partly / no.
-- The seed's pushback scale (1 to 5) contradicts its own examples and the 4-step ladder; which is right?
+- Connect the required Pod D `trainee_id` to the authenticated Zitadel identity when auth is implemented.
 - Skills, weights and thresholds: are there official ones? Is there a human-scored set for calibration?
 - Is Claude Code an approved tool for the confidential seed pack?
 
@@ -181,7 +179,7 @@ Real login and roles and cloud or Kubernetes deployment are deliberately out of 
 | **Persona** | The AI client: role, style, rules, and an escalation ladder of steps 1 to 4. |
 | **Scenario** | The situation the client is upset about, with their objections and a checklist of what a good answer contains. |
 | **Profile / Demand document** | The trainee's uploaded resume and the project demand uploaded by an admin. Each keeps what the pipeline extracted as JSON. |
-| **Turn** | A stored chat message. The assessment report numbers one client question and its trainee reply as the same logical turn. The external `roleplay-result` contract continues to number each message separately. |
+| **Turn** | A stored chat message. The assessment report numbers one client question and its trainee reply as the same logical turn. |
 | **Escalation step (1-4)** | How tough the client currently is. |
 | **Session** | One roleplay run by one trainee. |
 | **Assessment / Evidence** | The suggested score for a session / one cited quote behind it. |

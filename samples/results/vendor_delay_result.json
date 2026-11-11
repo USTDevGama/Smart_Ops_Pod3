@@ -1,26 +1,8 @@
 {
-  "contract": "roleplay-result",
-  "session_id": "sess-demo-0001",
-  "scenario_id": "VD-01",
-  "persona_version": "verma-strict-0.1",
-  "turns": [
-    {"turn": 1, "role": "client", "text": "Your supplier has not delivered the tracking module. When were you planning to tell me?"},
-    {"turn": 2, "role": "trainee", "text": "We hit a snag with the supplier and are looking at options. I will update you when I know more."},
-    {"turn": 3, "role": "client", "text": "Options is not a plan. Give me a date and tell me what it costs me."},
-    {"turn": 4, "role": "trainee", "text": "I should have escalated on Monday. The supplier now commits to 9 June. We will cover the extra four days of testing ourselves, and I will send you a status every Friday until it ships."},
-    {"turn": 5, "role": "client", "text": "Fine. But what is different this time, so I am not here again in a month?"}
-  ],
-  "result": {
-    "pushback_peak_step": 3,
-    "handled": "partly",
-    "strengths": [
-      "Admitted the late warning",
-      "Gave a specific date and said who pays"
-    ],
-    "gaps": [
-      "No change offered to avoid a repeat"
-    ],
-    "evidence_turns": [4]
-  },
-  "human_review_required": true
+  "trainee_id": "T-01",
+  "C_scores": {
+    "G06": 2.25,
+    "G08": 3.5,
+    "G10": 1.0
+  }
 }
