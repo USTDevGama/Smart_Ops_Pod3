@@ -1,7 +1,7 @@
 """Scoring pipeline (owner: Dev C): criterion validation, signals, weighted score, confidence.
 
 `ScoringOutput` is the final criterion-level output from the conversation-agent component. Code
-validates its exchange citations and combines it with the versioned rubric and validation signals
+validates its exchange citations and combines it with the scoring criteria and validation signals
 to produce an `Assessment`.
 """
 

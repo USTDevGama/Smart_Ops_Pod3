@@ -26,7 +26,7 @@ from app.db.session import get_engine
 from app.llm import LLMClient, get_llm_client
 from app.reports.generator import ReportArtifacts, generate_report
 from app.schemas import Assessment, Evaluation, PersonaConfig, ScoringConfig
-from app.schemas.enums import SessionStatus, TurnRole
+from app.schemas.enums import EndReason, SessionStatus, TurnRole
 from app.scoring.processor import ScoringValidationContext, build_assessment, derive_handled
 from app.scoring.rubric import default_scoring_config, prompt_config
 from app.scoring.scorer import score_session
@@ -117,6 +117,7 @@ def assess_session(
         config if documents else _without_signal(config, GROUNDED),
         validation,
         handled=derive_handled(output, config),
+        ended_by_trainee=session.end_reason == EndReason.TRAINEE_ENDED,
     )
 
     snapshot = {

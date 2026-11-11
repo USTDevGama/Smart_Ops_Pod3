@@ -8,8 +8,6 @@ scoring model (see `app/scoring/prompts.py`); it sees each label and description
 from app.schemas.config import ConfidenceConfig, CriterionConfig, ScoringConfig
 from app.scoring.signals import COMMITS, COMPOSED, GROUNDED, SPECIFIC
 
-RUBRIC_VERSION = "r2"
-
 CRITERIA = (
     CriterionConfig(
         id="C1",
@@ -58,7 +56,6 @@ CRITERIA = (
 
 def default_scoring_config() -> ScoringConfig:
     return ScoringConfig(
-        rubric_version=RUBRIC_VERSION,
         criteria=[criterion.model_copy() for criterion in CRITERIA],
         confidence=ConfidenceConfig(),
     )

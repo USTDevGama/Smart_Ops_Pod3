@@ -35,6 +35,7 @@ def test_clean_sample_scores_and_confidence_match_the_formula_example():
         [100, 60, 100, 100]  # C2 sits exactly on the "met" cutoff, so its margin term is 0
     )
     assert assessment.confidence_score == pytest.approx(88)
+    assert assessment.human_review_required is False
     assert [item.status for item in assessment.criteria] == [
         "partly",
         "met",
@@ -97,6 +98,54 @@ def test_short_session_confidence_is_capped():
     assessment = build_assessment(output, config, validation, handled="partly")
 
     assert assessment.confidence_score == pytest.approx(60)
+
+
+@pytest.mark.parametrize(
+    ("points", "turns", "ended_by_trainee", "expected_review"),
+    [
+        (0.9, 4, False, False),
+        (0.3775, 4, False, True),
+        (0.9, 3, False, True),
+        (0.9, 4, True, True),
+    ],
+)
+def test_admin_review_threshold_and_minimum_turns(
+    points, turns, ended_by_trainee, expected_review
+):
+    output, config, _ = _inputs()
+    config = config.model_copy(
+        update={
+            "criteria": [
+                criterion.model_copy(update={"signal_keys": []})
+                for criterion in config.criteria
+            ]
+        }
+    )
+    output_data = output.model_dump(mode="python")
+    for criterion in output_data["criteria"]:
+        criterion["points"] = points
+        criterion["evidence"] = [{"turn": 1, "polarity": "positive"}]
+    output = ScoringOutput.model_validate(output_data)
+    exchanges = set(range(1, turns + 1))
+    validation = ScoringValidationContext(
+        client_exchange_numbers=exchanges,
+        trainee_exchange_numbers=exchanges,
+        question_validity={turn: True for turn in exchanges},
+        trainee_signals={turn: set() for turn in exchanges},
+    )
+
+    assessment = build_assessment(
+        output,
+        config,
+        validation,
+        handled="partly",
+        ended_by_trainee=ended_by_trainee,
+    )
+
+    assert assessment.confidence_score == pytest.approx(
+        85 if points == 0.3775 else 100
+    )
+    assert assessment.human_review_required is expected_review
 
 
 @pytest.mark.parametrize(

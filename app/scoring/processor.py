@@ -12,6 +12,9 @@ from app.schemas.assessment import (
 )
 from app.schemas.config import CriterionConfig, ScoringConfig
 
+ADMIN_REVIEW_CONFIDENCE_THRESHOLD = 85.0
+ADMIN_REVIEW_MIN_TURNS = 4
+
 
 class ScoringValidationContext(BaseModel):
     """Validation results keyed by logical exchange number."""
@@ -55,6 +58,7 @@ def build_assessment(
     validation: ScoringValidationContext,
     *,
     handled: Literal["yes", "partly", "no"],
+    ended_by_trainee: bool = False,
 ) -> Assessment:
     """Apply the weighted score, status cutoffs, and proposed confidence formula."""
     configured = {criterion.id: criterion for criterion in config.criteria}
@@ -84,14 +88,17 @@ def build_assessment(
         confidence = min(confidence, config.confidence.short_session_cap)
 
     return Assessment(
-        rubric_version=config.rubric_version,
         criteria=results,
         handled=handled,
         confidence_score=confidence,
         strengths=scoring_output.strengths,
         gaps=scoring_output.gaps,
         unanswered_objections=scoring_output.unanswered_objections,
-        human_review_required=True,
+        human_review_required=(
+            ended_by_trainee
+            or confidence <= ADMIN_REVIEW_CONFIDENCE_THRESHOLD
+            or len(validation.trainee_exchange_numbers) < ADMIN_REVIEW_MIN_TURNS
+        ),
     )
 
 

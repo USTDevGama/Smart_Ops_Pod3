@@ -131,14 +131,13 @@ class ConfidenceConfig(BaseModel):
 
 
 class ScoringConfig(BaseModel):
-    rubric_version: str = Field(min_length=1)
     criteria: list[CriterionConfig] = Field(min_length=1)
     status_cutoffs: StatusCutoffs = Field(default_factory=StatusCutoffs)
     handled_cutoffs: HandledCutoffs = Field(default_factory=HandledCutoffs)
     confidence: ConfidenceConfig = Field(default_factory=ConfidenceConfig)
 
     @model_validator(mode="after")
-    def _valid_rubric(self) -> "ScoringConfig":
+    def _valid_criteria(self) -> "ScoringConfig":
         total = sum(criterion.weight for criterion in self.criteria)
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"criterion weights must sum to 1 (got {total})")

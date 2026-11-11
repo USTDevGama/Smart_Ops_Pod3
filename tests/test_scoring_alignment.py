@@ -71,6 +71,7 @@ def test_the_job_scores_the_real_chat_and_saves_one_snapshot(ended_chat):
 
     assert assessment.overall_score == pytest.approx(47.5)  # 0.5/0.7/0.4/0.2 at 25/30/25/20
     assert assessment.handled == "partly"  # 47.5 is between the 40 and 70 cutoffs
+    assert assessment.human_review_required is True  # trainee ended this chat
     assert [c.id for c in assessment.criteria] == ["C1", "C2", "C3", "C4"]
 
     snapshot = json.loads(api.store.read(blob_key(session_id, ASSESSMENT_FILE)))
@@ -90,6 +91,7 @@ def test_the_report_is_written_from_the_snapshot_and_needs_no_scenario(ended_cha
     assert report_ready(api.store, session_id)
     markdown = api.store.read(blob_key(session_id, "report.md")).decode()
     assert "Overall score: **47.5 / 100**" in markdown
+    assert "- Admin review: **required**" in markdown
     assert "Scenario" not in markdown
     assert "### Turn 5" in markdown  # the unanswered last client message is in the transcript
     assert api.store.read(blob_key(session_id, "report.pdf")).startswith(b"%PDF-")

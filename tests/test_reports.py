@@ -22,7 +22,6 @@ from app.schemas.enums import (
 
 def _assessment(**overrides) -> ValidatedAssessment:
     data = {
-        "rubric_version": "r1",
         "criteria": [
             {
                 "id": "C1",
@@ -125,13 +124,26 @@ def test_generates_markdown_html_and_pdf_for_completed_session(db):
     report = generate_report(db, session.id, _assessment())
 
     assert "Overall score: **45.0 / 100**" in report.markdown
-    assert "Persona: strict-1.0 | Rubric: r1" in report.markdown
+    assert "Persona: strict-1.0 | Ended: turn limit reached | Date:" in report.markdown
+    assert "Rubric:" not in report.markdown
+    assert (
+        "| C2 | Gives a prevention plan | 50% | not met | 0.2 | 60 | "
+        "Turn 2 (-): No concrete prevention step. |"
+    ) in report.markdown
     assert "- Confidence score: 71" in report.markdown
     assert "Scenario" not in report.markdown
     assert "### Turn 1" in report.markdown
     assert "**Client:** Why is the delivery late?" in report.markdown
     assert "**Trainee:** I own the delay." in report.markdown
-    assert "Turn 2 (-): No concrete prevention step." in report.markdown
+    assert (
+        "| ID | Criterion | Weight | Status | Points | Confidence | Evidence |"
+        in report.markdown
+    )
+    assert "## Criterion details" not in report.markdown
+    assert 'width="28%"' in report.html
+    assert report.html.count('<th align="center"') == 7
+    assert '<td align="left">Owns the delay</td>' in report.html
+    assert '<td align="center">50%</td>' in report.html
     assert "<table>" in report.html
     assert "<script>" not in report.html
     assert report.pdf.startswith(b"%PDF-")

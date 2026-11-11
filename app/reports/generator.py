@@ -83,7 +83,11 @@ _HTML_TAGS = {
     "ul",
 }
 
-_HTML_ATTRIBUTES = {"a": ["href", "title"]}
+_HTML_ATTRIBUTES = {
+    "a": ["href", "title"],
+    "td": ["align", "width"],
+    "th": ["align", "width"],
+}
 _HTML_PROTOCOLS = {"https", "http", "mailto"}
 
 _END_REASON_LABELS = {
@@ -92,6 +96,12 @@ _END_REASON_LABELS = {
     "time_limit": "time limit",
     "trainee_ended": "trainee ended",
     "turn_cap": "turn limit reached",
+}
+
+_STATUS_LABELS = {
+    "not_met": "not met",
+    "partly": "partly",
+    "met": "met",
 }
 
 
@@ -204,9 +214,6 @@ def render_markdown(data: ReportData) -> str:
         (
             f"Session: {_md_text(data.session_id)} | "
             f"Persona: {_md_text(data.persona_version)} | "
-            f"Rubric: {_md_text(assessment.rubric_version)}"
-        ),
-        (
             f"Ended: {_md_text(data.end_reason)} | "
             f"Date: {data.ended_at.strftime('%d %b %Y')}"
         ),
@@ -243,7 +250,7 @@ def render_markdown(data: ReportData) -> str:
                     _table_text(criterion.id),
                     _table_text(criterion.label),
                     f"{criterion.weight * 100:.0f}%",
-                    criterion.status,
+                    _STATUS_LABELS[criterion.status],
                     f"{criterion.points:.1f}",
                     f"{criterion.confidence:.0f}",
                     evidence,
@@ -292,13 +299,13 @@ def _md_text(value: str) -> str:
 
 
 def _table_text(value: str) -> str:
-    # fpdf2 cannot render a line break inside a table cell, so a cell is always one line.
     return " ".join(_md_text(value).replace("<br>", " ").split())
 
 
 def render_html(markdown_text: str) -> tuple[str, str]:
     """Convert Markdown to sanitized HTML and return the full document and its body."""
     generated = markdown(markdown_text, extensions=["tables", "sane_lists"])
+    generated = _apply_score_table_layout(generated)
     body = bleach.clean(
         generated,
         tags=_HTML_TAGS,
@@ -323,7 +330,11 @@ def render_html(markdown_text: str) -> tuple[str, str]:
     }}
     h1, h2, h3 {{ color: #202a44; }}
     table {{ border-collapse: collapse; margin: 1rem 0; width: 100%; }}
-    th, td {{ border: 1px solid #e6e6e6; padding: .45rem; text-align: left; vertical-align: top; }}
+    th, td {{
+      border: 1px solid #e6e6e6;
+      padding: .6rem .65rem;
+      vertical-align: top;
+    }}
     th {{ background: #f5f5f5; }}
     blockquote {{ border-left: 3px solid #c8c8c8; margin-left: 0; padding-left: 1rem; }}
     @media print {{ body {{ margin: 0; max-width: none; }} }}
@@ -335,6 +346,40 @@ def render_html(markdown_text: str) -> tuple[str, str]:
 </html>
 """
     return document, body
+
+
+def _apply_score_table_layout(generated: str) -> str:
+    widths = (5, 24, 9, 12, 8, 14, 28)
+    header_alignments = ("center",) * len(widths)
+    cell_alignments = ("center", "left", "center", "center", "center", "center", "left")
+    table_match = re.search(r"<table>.*?</table>", generated, flags=re.DOTALL)
+    if table_match is None:
+        return generated
+
+    row_index = 0
+
+    def layout_row(row_match: re.Match[str]) -> str:
+        nonlocal row_index
+        column_index = 0
+
+        def layout_cell(cell_match: re.Match[str]) -> str:
+            nonlocal column_index
+            index = column_index
+            column_index += 1
+            if index >= len(widths):
+                return cell_match.group()
+            alignment = header_alignments if row_index == 0 else cell_alignments
+            attributes = [f'align="{alignment[index]}"']
+            if row_index == 0:
+                attributes.append(f'width="{widths[index]}%"')
+            return f"<{cell_match.group(1)} {' '.join(attributes)}>"
+
+        row = re.sub(r"<(th|td)(?:\s+[^>]*)?>", layout_cell, row_match.group())
+        row_index += 1
+        return row
+
+    table = re.sub(r"<tr>.*?</tr>", layout_row, table_match.group(), flags=re.DOTALL)
+    return generated[: table_match.start()] + table + generated[table_match.end() :]
 
 
 def _find_font_files() -> dict[str, Path]:

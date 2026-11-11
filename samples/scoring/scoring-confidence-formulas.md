@@ -5,7 +5,7 @@ The confidence says how much a human should double-check that score. Confidence 
 score. Confidence parameters are starting values, not calibrated or approved production
 thresholds.
 
-## The rubric (fixed, rubric version `r2`)
+## The scoring criteria
 
 Four criteria apply to every scenario. They are defined in `app/scoring/rubric.py` and mirrored in
 `samples/scoring/default.json` (a test keeps the two equal). The scoring model sees each
@@ -97,6 +97,13 @@ For sessions with fewer than three trainee exchanges, the result is capped at 60
 Sample (all questions valid, markers only on turns 3 and 4): criterion confidences 100 / 40 / 100
 / 100, session confidence 82. C2 is low because its model evidence cites turn 3 as positive while
 no composure marker fired there, and because 0.7 sits exactly on the `met` cutoff.
+
+## Admin review
+
+Admin review is required when the confidence score is 85 or lower, or when the session has fewer
+than four completed client-question/trainee-answer exchanges. Only a score above 85 with at least
+four completed exchanges is marked as not requiring admin review, unless the trainee ended the
+chat. A trainee-ended chat always requires admin review, regardless of confidence or turn count.
 
 ## Still provisional
 

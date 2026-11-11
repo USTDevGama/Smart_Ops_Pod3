@@ -77,7 +77,6 @@ class CriterionAssessment(BaseModel):
 class Assessment(BaseModel):
     """Validated, report-ready score; it is derived from a session, not a DB row."""
 
-    rubric_version: str = Field(min_length=1)
     criteria: list[CriterionAssessment] = Field(min_length=1)
     handled: Literal["yes", "partly", "no"]
     confidence_score: float = Field(ge=0, le=100)
@@ -87,7 +86,7 @@ class Assessment(BaseModel):
     human_review_required: bool = True
 
     @model_validator(mode="after")
-    def _consistent_rubric(self) -> "Assessment":
+    def _consistent_criteria(self) -> "Assessment":
         keys = [criterion.id for criterion in self.criteria]
         if len(keys) != len(set(keys)):
             raise ValueError("criterion ids must be unique")

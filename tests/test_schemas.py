@@ -31,7 +31,6 @@ def test_sample_scenario_is_valid():
 def test_sample_scoring_profile_is_valid():
     scoring = ScoringConfig.model_validate(load_sample("scoring/default.json"))
     assert sum(criterion.weight for criterion in scoring.criteria) == pytest.approx(1.0)
-    assert scoring.rubric_version == "r2"
 
 
 def test_sample_scoring_profile_is_the_fixed_rubric_in_code():
