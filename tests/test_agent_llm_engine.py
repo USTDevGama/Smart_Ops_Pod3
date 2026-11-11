@@ -162,6 +162,18 @@ def test_a_failed_call_is_not_retried_more_than_once():
     assert Down.calls == 2
 
 
+def test_a_failed_call_logs_its_reason_code_and_never_the_answer(caplog):
+    class Refused:
+        def complete(self, request: LLMRequest) -> LLMResponse:
+            raise LLMError("the model call failed (HTTP 403)")
+
+    with caplog.at_level("WARNING"), pytest.raises(AgentError):
+        LLMTurnEngine(Refused()).respond(ctx(), STRONG)
+
+    assert "the model call failed (HTTP 403)" in caplog.text
+    assert STRONG not in caplog.text
+
+
 # --- time ----------------------------------------------------------------------------------------
 
 

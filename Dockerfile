@@ -14,6 +14,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# The company proxy re-signs some HTTPS traffic (files.pythonhosted.org), so pip and uv cannot
+# verify it unless the system store trusts the proxy's root certificate. The deploy workflow copies
+# that root to ca/corp-root.crt before the build (it is not in git); with only ca/.gitkeep in the
+# folder this step adds nothing, so a local build still works. PIP_CERT points pip at the system
+# bundle, which then holds the public roots plus that root; uv reads the system store
+# (UV_NATIVE_TLS=1). The model gateway uses a public certificate chain and needs nothing here.
+COPY ca/ /usr/local/share/ca-certificates/
+RUN update-ca-certificates
+ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt
+
 # Pinned installer for reproducible builds.
 RUN pip install --no-cache-dir uv==0.13.7
 

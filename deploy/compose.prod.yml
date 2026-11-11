@@ -1,5 +1,9 @@
 name: pod-c
 
+# Backend only: the API and the Celery worker. The Streamlit UI is not deployed (a common UI for
+# all pods comes later). It stays defined under the "ui" profile for anyone who starts it by hand:
+#   docker compose -p pod-c -f compose.prod.yml --profile ui up -d ui
+
 services:
   api:
     image: pod-c-app:${IMAGE_TAG}
@@ -10,15 +14,19 @@ services:
     volumes:
       - pod-c-storage:/app/storage
     networks:
-      - default
-      - shared-services
+      default: {}
+      shared-services:
+        # Pod D's API is also called "api" on shared-services, so that name is ambiguous there.
+        # Other containers (the common UI later) should call http://pod-c-api:8000.
+        aliases:
+          - pod-c-api
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=3)"
         ]
       interval: 10s
       timeout: 5s
@@ -52,9 +60,11 @@ services:
     restart: unless-stopped
 
   ui:
+    profiles:
+      - ui
     image: pod-c-app:${IMAGE_TAG}
-    env_file:
-      - ./.env
+    # No env_file: the UI reads only PODC_API_URL, so it never receives the database URL or the
+    # model key.
     environment:
       PODC_API_URL: http://api:8000
     command:

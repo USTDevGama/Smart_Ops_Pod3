@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="PODC_", extra="ignore")
 
     env: str = "local"
+    # Level for the app's own log lines (`llm call ... Ns`, `agent ... ok`); see app/main.py.
+    log_level: str = "INFO"
     database_url: str = "postgresql+psycopg://podc:podc@localhost:5432/podc"
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
