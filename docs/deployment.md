@@ -84,6 +84,15 @@ Two things to watch in Key Vault mode:
 - **The Azure client secret expires.** When it does, the vault login fails (`vault login failed (HTTP 401)`) and every model call fails. Note its expiry date in a calendar and renew it before then.
 - **The vault must hold the new key.** If the gateway owner rotates the key but does not update the vault secret, refetching returns the same dead key.
 
+What a failed key fetch looks like in the "Model key check" warning, and what it means:
+
+| Warning | Meaning |
+|---|---|
+| `vault login failed (ConnectError: [SSL: CERTIFICATE_VERIFY_FAILED] ...)` | The container does not trust the certificate in front of Azure. The proxy re-signs Azure's login, and the vault client (plain `httpx`) only trusts its own bundled list, not the system store. The image sets `SSL_CERT_FILE` to the system bundle, which holds the proxy root, for exactly this. If it appears again, check that `ca/corp-root.crt` was staged for the build |
+| `vault login failed (ConnectError: [Errno -2] Name or service not known)` | The container cannot resolve Azure's name: a DNS problem on the VM, not a certificate |
+| `vault login failed (HTTP 401)` | The Azure client secret is wrong or has expired |
+| `secret fetch failed (HTTP 403)` or `404` | The app registration has no access to the vault, or the secret name is wrong |
+
 To switch to Key Vault mode:
 ```
 gh variable set PODC_AZURE_VAULT_URL         --repo USTDevGama/Smart_Ops_Pod3 --body "https://<your-vault>.vault.azure.net"
@@ -123,6 +132,6 @@ The API log shows `llm call purpose=... Ns` for each model call, and `agent ...`
 ## Known gaps
 - Real login (Zitadel) and the common UI are not built.
 - Before enabling Pod D sync, Zitadel auth must map the verified trainee identity to the existing Pod D `trainees.trainee_id` and store that ID as the session owner reference. Never use an untrusted UI-supplied ID.
-- Key Vault mode has not run inside a container yet. The vault client (plain `httpx`) needs to reach Azure AD and the vault from there; it worked from the VM itself. The "Model key check" step on the first vault-mode deploy is the test.
+- Key Vault mode failed its first run inside the container (`vault login failed (ConnectError)`: the vault client did not trust the proxy-re-signed Azure login). The image now sets `SSL_CERT_FILE` to the system bundle, and the error now says why. The "Model key check" step on the next deploy is the test that it works.
 - The server's root disk (where Docker keeps images, build cache and the volume) was 75% full with about 8 GB free. The workflow removes only our own old tags; build cache is shared with the other pods and is not pruned. Tell the architect.
 - Shell settings on the shared `localadmin` account export `SSL_CERT_FILE` and `REQUESTS_CA_BUNDLE` for login shells. Run test commands with `env -u SSL_CERT_FILE -u REQUESTS_CA_BUNDLE`. The runner service does not read them.

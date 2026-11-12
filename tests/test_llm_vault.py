@@ -100,6 +100,49 @@ def test_a_failed_secret_fetch_raises_a_status_only_error():
     assert "SECRET-DETAIL" not in str(err.value)
 
 
+class _Boom(httpx.BaseTransport):
+    """Raises the given error on every request."""
+
+    def __init__(self, error: Exception):
+        self._error = error
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        raise self._error
+
+
+def test_a_failed_connection_says_why_without_leaking_the_request():
+    """A certificate error is told apart from a blocked network by the connection's own message."""
+    reason = "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get issuer"
+    client = httpx.Client(transport=_Boom(httpx.ConnectError(reason)))
+    with pytest.raises(LLMError) as err:
+        vault.fetch_secret(_settings(azure_client_secret="TOP-SECRET-VALUE"), client=client)
+    message = str(err.value)
+    assert message.startswith("vault login failed (ConnectError: ")
+    assert "CERTIFICATE_VERIFY_FAILED" in message
+    assert "TOP-SECRET-VALUE" not in message and "tenant-1" not in message
+
+
+def test_a_failed_secret_fetch_connection_says_why_too():
+    class _LoginThenBoom(httpx.BaseTransport):
+        """The login works; the connection to the vault then fails."""
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            if request.url.host == "login.microsoftonline.com":
+                return _json_response(200, {"access_token": "tok"})
+            raise httpx.ConnectError("[Errno -2] Name or service not known")
+
+    with pytest.raises(LLMError, match=r"secret fetch failed \(ConnectError: .*Name or service"):
+        vault.fetch_secret(_settings(), client=httpx.Client(transport=_LoginThenBoom()))
+
+
+def test_other_connection_errors_stay_type_only():
+    """Only a failed connection explains itself; a timeout or anything else is just its type."""
+    client = httpx.Client(transport=_Boom(httpx.ReadTimeout("secret-looking text in a message")))
+    with pytest.raises(LLMError) as err:
+        vault.fetch_secret(_settings(), client=client)
+    assert str(err.value) == "vault login failed (ReadTimeout)"
+
+
 @pytest.mark.parametrize(
     "missing", ["azure_tenant_id", "azure_client_id", "azure_vault_url", "azure_vault_secret_name"]
 )

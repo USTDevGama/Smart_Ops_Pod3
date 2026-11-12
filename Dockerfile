@@ -26,6 +26,14 @@ COPY ca/ /usr/local/share/ca-certificates/
 RUN update-ca-certificates
 ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 
+# The proxy also re-signs Azure's login endpoint, which the Key Vault client calls at run time. That
+# client is plain httpx, which trusts only the certifi list and ignores the system store, so without
+# this it fails with "certificate verify failed" (seen as `vault login failed (ConnectError)`). Point
+# it, and `requests`, at the system bundle: the public roots plus the proxy root. The Anthropic client
+# already reads the system store, which is why the model gateway worked without it.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+
 # Pinned installer for reproducible builds.
 RUN pip install --no-cache-dir uv==0.13.7
 
