@@ -155,8 +155,9 @@ reliably identify the chosen scenario.
 - The external `RoleplayResult` contract and the internal criterion-scoring format are distinct.
   `build_pod_d_result` maps C1+C3 to G06, C2 to G08, and C4 to G10 using criterion weights,
   then scales and rounds points to integer scores 1-5 (zero clamps to 1 for Pod D's current
-  constraint). The post-session job upserts them to Pod D. Zitadel must supply the trusted
-  `trainee_id` as the session owner reference before production sync is enabled.
+  constraint). The post-session job upserts them to Pod D only in production when dev auth is
+  disabled. Zitadel must supply the trusted `trainee_id` as the session owner reference before
+  enabling production sync.
 
 ## Repository status at this snapshot
 

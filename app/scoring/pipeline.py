@@ -74,11 +74,15 @@ def assess_and_render(
 
 def _sync_pod_d_scores(db: Session, session_id: UUID, assessment: Assessment) -> None:
     settings = get_settings()
-    if settings.trainee_db_url is None:
-        if settings.env == "prod":
-            raise RuntimeError("TRAINEE_DB_URL must be configured in production")
-        log.info("Pod D score sync skipped: TRAINEE_DB_URL is not configured")
+    if settings.env != "prod" or settings.dev_auth_enabled:
+        log.info(
+            "Pod D score sync skipped: requires PODC_ENV=prod and dev auth disabled"
+        )
         return
+    if settings.trainee_db_url is None:
+        raise RuntimeError(
+            "TRAINEE_DB_URL must be configured when production Zitadel score sync is enabled"
+        )
 
     session = db.get(m.RoleplaySession, session_id)
     if session is None:
