@@ -3,9 +3,12 @@ client-credentials flow, so the key never has to sit in a config file.
 
 Two calls: an AAD token for the Key Vault data plane, then the secret itself
 (`app/config.py`'s `PODC_AZURE_*` settings). The result is cached in memory per
-(tenant, client, vault, secret name), so a long-running process asks only once. Nothing here
-persists anything to disk or logs the token or the secret value. Errors carry an HTTP status
-only - never the vault's response body (which could echo back parts of the request).
+(tenant, client, vault, secret name), so a long-running process asks only once, until
+`invalidate_secret()` drops that entry (e.g. because the caller got rejected as unauthorized and
+the secret was rotated). Both calls go through `PODC_ANTHROPIC_PROXY_URL` when it is set, the
+same local SOCKS/HTTP proxy the model client uses. Nothing here persists anything to disk or
+logs the token or the secret value. Errors carry an HTTP status only - never the vault's
+response body (which could echo back parts of the request).
 """
 
 import httpx
@@ -35,11 +38,25 @@ def fetch_secret(settings: Settings, *, client: httpx.Client | None = None) -> s
     if key in _cache:
         return _cache[key]
 
-    http = client or httpx.Client(timeout=20.0)
+    # Same local SOCKS/HTTP proxy as the model client (`PODC_ANTHROPIC_PROXY_URL`): when this
+    # machine can't reach the internet directly, AAD and the vault need it too, or the calls
+    # just hang until they time out.
+    http = client or httpx.Client(timeout=20.0, proxy=settings.anthropic_proxy_url)
     token = _get_token(http, settings)
     secret = _get_secret(http, settings, token)
     _cache[key] = secret
     return secret
+
+
+def invalidate_secret(settings: Settings) -> None:
+    """Drop the cached secret for these settings, so the next `fetch_secret()` call re-fetches
+    it. Call this after a call made with the cached value is rejected as unauthorized - the
+    vault secret may have been rotated under us."""
+    key: CacheKey = (
+        settings.azure_tenant_id, settings.azure_client_id,
+        settings.azure_vault_url, settings.azure_vault_secret_name,
+    )
+    _cache.pop(key, None)
 
 
 def _configured(settings: Settings) -> bool:

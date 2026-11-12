@@ -4,7 +4,10 @@ Anthropic-compatible gateway.
 Everything else codes against `LLMClient`, so this is the only place that knows about the
 provider. Settings (`PODC_ANTHROPIC_*`) come from `app/config.py`; the key is a `SecretStr`.
 If no key is set directly, it is fetched from Azure Key Vault instead (`app/llm/vault.py`,
-`PODC_AZURE_*`) - a direct key always wins. If this machine cannot reach the model directly,
+`PODC_AZURE_*`) - a direct key always wins. The vault's fetch is cached, so a rotated secret
+isn't refetched until a call made with the stale key is rejected as unauthorized; at that point
+the cache is dropped and the call is retried once with a freshly fetched key. If this machine
+cannot reach the model directly,
 `PODC_ANTHROPIC_PROXY_URL` routes the call through a local SOCKS/HTTP proxy instead (typically
 an `ssh -D` tunnel to a host that can reach it).
 
@@ -74,6 +77,13 @@ class ProviderLLM:
         try:
             with client.messages.stream(**self._kwargs(request)) as stream:
                 yield from stream.text_stream
+        except anthropic.AuthenticationError:
+            client = self._refresh_client()
+            try:
+                with client.messages.stream(**self._kwargs(request)) as stream:
+                    yield from stream.text_stream
+            except anthropic.APIError as exc:
+                raise _call_failed(exc) from None
         except anthropic.APIError as exc:
             raise _call_failed(exc) from None
 
@@ -101,6 +111,12 @@ class ProviderLLM:
 
         try:
             return client.messages.create(**self._kwargs(request))
+        except anthropic.AuthenticationError:
+            client = self._refresh_client()
+            try:
+                return client.messages.create(**self._kwargs(request))
+            except anthropic.APIError as exc:
+                raise _call_failed(exc) from None
         except anthropic.APIError as exc:
             raise _call_failed(exc) from None
 
@@ -138,6 +154,18 @@ class ProviderLLM:
                 api_key=key, timeout=s.anthropic_timeout_s, max_retries=MAX_RETRIES, **extra
             )
         return self._client
+
+    def _refresh_client(self) -> Any:
+        """Called after an `AuthenticationError`: the cached key is stale, most likely a Key
+        Vault secret that got rotated under us. Drop the vault's cached value (if that's where
+        the key came from) and the built client, then rebuild from a fresh fetch."""
+        s = self._settings
+        if s.anthropic_api_key is None and s.azure_vault_url:
+            from app.llm.vault import invalidate_secret
+
+            invalidate_secret(s)
+        self._client = None
+        return self._get_client()
 
     def _resolve_key(self) -> str:
         """A direct key always wins; otherwise fall back to the Key Vault secret (if the vault

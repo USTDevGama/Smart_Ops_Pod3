@@ -111,3 +111,24 @@ def test_a_partially_configured_vault_is_a_clear_error_before_any_call(missing):
 def test_missing_client_secret_is_also_a_clear_error():
     with pytest.raises(LLMError, match="not fully configured"):
         vault.fetch_secret(_settings(azure_client_secret=None))
+
+
+def test_invalidate_secret_forces_the_next_fetch_to_go_back_to_the_vault():
+    settings = _settings()
+    client, _ = _client(
+        [_json_response(200, {"access_token": "t1"}), _json_response(200, {"value": "old-key"})]
+    )
+    assert vault.fetch_secret(settings, client=client) == "old-key"
+
+    vault.invalidate_secret(settings)
+
+    client2, _ = _client(
+        [_json_response(200, {"access_token": "t2"}), _json_response(200, {"value": "new-key"})]
+    )
+    assert vault.fetch_secret(settings, client=client2) == "new-key"
+
+
+def test_invalidate_secret_on_an_unrelated_or_uncached_key_is_a_no_op():
+    settings = _settings()
+    vault.invalidate_secret(settings)  # nothing cached yet - should not raise
+    vault.invalidate_secret(_settings(azure_vault_secret_name="other"))

@@ -259,3 +259,70 @@ def test_stream_yields_the_pieces():
     stub = StubClient(pieces=("hel", "lo"))
     assert "".join(ProviderLLM(_settings(), client=stub).stream(_request())) == "hello"
     assert stub.calls[0]["thinking"] == {"type": "disabled"}
+
+
+def _auth_error() -> Exception:
+    response = httpx2.Response(401, request=httpx2.Request("POST", "https://example.invalid/"))
+    return anthropic.AuthenticationError(
+        "stale key", response=response,
+        body={"error": {"type": "authentication_error", "message": "stale key"}},
+    )
+
+
+def test_refresh_client_invalidates_the_vault_cache_when_the_key_came_from_there(monkeypatch):
+    invalidated: list[Settings] = []
+    monkeypatch.setattr("app.llm.vault.invalidate_secret", lambda s: invalidated.append(s))
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda s: "fresh-vault-key")
+    settings = _settings(anthropic_api_key=None, azure_vault_url="https://vault.invalid")
+    provider = ProviderLLM(settings, client=StubClient(_message('{"ok": true, "word": "x"}')))
+    provider._refresh_client()
+    assert invalidated == [settings]
+
+
+def test_refresh_client_does_not_touch_the_vault_when_a_direct_key_is_set(monkeypatch):
+    invalidated: list[Settings] = []
+    monkeypatch.setattr("app.llm.vault.invalidate_secret", lambda s: invalidated.append(s))
+    settings = _settings(azure_vault_url="https://vault.invalid")  # api_key is also set
+    provider = ProviderLLM(settings, client=StubClient(_message('{"ok": true, "word": "x"}')))
+    provider._refresh_client()
+    assert invalidated == []
+
+
+def test_an_authentication_error_on_a_vault_backed_key_refreshes_and_retries_once(monkeypatch):
+    """A rotated Key Vault secret makes the cached key 401; the call is retried once with a
+    freshly fetched key."""
+    monkeypatch.setattr("app.llm.vault.invalidate_secret", lambda s: None)
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda s: "fresh-vault-key")
+
+    real_client_cls = __import__("anthropic").AnthropicFoundry
+    built: dict = {}
+
+    class _Capturing(real_client_cls):
+        def __init__(self, **kwargs):
+            built.update(kwargs)
+            super().__init__(**kwargs)
+            self.messages.create = lambda **_: _message('{"ok": true, "word": "x"}')
+
+    monkeypatch.setattr("anthropic.AnthropicFoundry", _Capturing)
+    settings = _settings(anthropic_api_key=None, azure_vault_url="https://vault.invalid")
+    response = ProviderLLM(settings, client=StubClient(error=_auth_error())).complete(_request())
+
+    assert built["api_key"] == "fresh-vault-key"
+    assert response.parsed == Reply(ok=True, word="x")
+
+
+def test_two_authentication_failures_in_a_row_raise_once_not_loop_forever(monkeypatch):
+    monkeypatch.setattr("app.llm.vault.invalidate_secret", lambda s: None)
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda s: "still-stale-key")
+
+    real_client_cls = __import__("anthropic").AnthropicFoundry
+
+    class _StillFailing(real_client_cls):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.messages.create = lambda **_: (_ for _ in ()).throw(_auth_error())
+
+    monkeypatch.setattr("anthropic.AnthropicFoundry", _StillFailing)
+    settings = _settings(anthropic_api_key=None, azure_vault_url="https://vault.invalid")
+    with pytest.raises(LLMError, match="401"):
+        ProviderLLM(settings, client=StubClient(error=_auth_error())).complete(_request())
