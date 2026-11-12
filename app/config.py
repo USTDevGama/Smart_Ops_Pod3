@@ -64,9 +64,12 @@ class Settings(BaseSettings):
     # Local folder holding the program's confidential seed pack. Never inside this repo.
     seed_dir: str | None = None
 
-    @field_validator("trainee_db_url", mode="before")
+    @field_validator(
+        "trainee_db_url", "anthropic_api_key", "azure_client_secret", mode="before"
+    )
     @classmethod
-    def _empty_trainee_db_url_is_unset(cls, value: object) -> object:
+    def _blank_secret_is_unset(cls, value: object) -> object:
+        """Treat blank secret values as unset, including the optional Pod D database URL."""
         if isinstance(value, str) and not value.strip():
             return None
         return value

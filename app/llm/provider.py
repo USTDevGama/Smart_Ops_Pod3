@@ -163,7 +163,17 @@ class ProviderLLM:
         if s.anthropic_api_key is None and s.azure_vault_url:
             from app.llm.vault import invalidate_secret
 
+            log.warning(
+                "model call rejected as unauthorized: refetching the key from the Key Vault"
+            )
             invalidate_secret(s)
+        else:
+            # Nothing newer to fetch: the key is a fixed setting, so the retry uses the same one.
+            # Say so, so a stale PODC_ANTHROPIC_API_KEY is easy to spot in the logs.
+            log.warning(
+                "model call rejected as unauthorized and the key is a fixed setting "
+                "(PODC_ANTHROPIC_API_KEY): there is nothing newer to fetch"
+            )
         self._client = None
         return self._get_client()
 

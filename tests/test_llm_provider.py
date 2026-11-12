@@ -288,6 +288,47 @@ def test_refresh_client_does_not_touch_the_vault_when_a_direct_key_is_set(monkey
     assert invalidated == []
 
 
+def test_a_blank_key_setting_counts_as_unset_so_the_vault_still_applies(monkeypatch):
+    """`PODC_ANTHROPIC_API_KEY=` (blank) in an env file must not beat the Key Vault."""
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda settings: "vault-key")
+    for blank in ("", "   "):
+        settings = _settings(anthropic_api_key=blank, azure_vault_url="https://vault.invalid")
+        assert settings.anthropic_api_key is None
+        assert ProviderLLM(settings)._resolve_key() == "vault-key"
+
+
+def test_a_blank_key_in_the_environment_is_unset_too(monkeypatch):
+    monkeypatch.setenv("PODC_ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("PODC_AZURE_CLIENT_SECRET", "")
+    settings = Settings(_env_file=None)
+    assert settings.anthropic_api_key is None
+    assert settings.azure_client_secret is None
+
+
+def test_a_real_key_is_still_kept():
+    assert _settings(anthropic_api_key="sk-real").anthropic_api_key.get_secret_value() == "sk-real"
+
+
+def test_a_rejected_vault_key_is_logged_as_a_refetch(monkeypatch, caplog):
+    monkeypatch.setattr("app.llm.vault.invalidate_secret", lambda s: None)
+    monkeypatch.setattr("app.llm.vault.fetch_secret", lambda s: "fresh-vault-key")
+    settings = _settings(anthropic_api_key=None, azure_vault_url="https://vault.invalid")
+    provider = ProviderLLM(settings, client=StubClient(_message('{"ok": true, "word": "x"}')))
+    with caplog.at_level("WARNING"):
+        provider._refresh_client()
+    assert "refetching the key from the Key Vault" in caplog.text
+    assert "fresh-vault-key" not in caplog.text
+
+
+def test_a_rejected_fixed_key_is_logged_as_having_nothing_newer(caplog):
+    settings = _settings(azure_vault_url="https://vault.invalid")  # a direct key is set
+    provider = ProviderLLM(settings, client=StubClient(_message('{"ok": true, "word": "x"}')))
+    with caplog.at_level("WARNING"):
+        provider._refresh_client()
+    assert "fixed setting" in caplog.text and "nothing newer to fetch" in caplog.text
+    assert "sk-test-not-real" not in caplog.text
+
+
 def test_an_authentication_error_on_a_vault_backed_key_refreshes_and_retries_once(monkeypatch):
     """A rotated Key Vault secret makes the cached key 401; the call is retried once with a
     freshly fetched key."""

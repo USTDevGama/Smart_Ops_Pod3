@@ -125,6 +125,13 @@ jobs:
           PODC_ANTHROPIC_API_KEY: ${{ secrets.PODC_ANTHROPIC_API_KEY }}
           PODC_ANTHROPIC_MODEL: ${{ secrets.PODC_ANTHROPIC_MODEL }}
           PODC_ANTHROPIC_GATEWAY_URL: ${{ secrets.PODC_ANTHROPIC_GATEWAY_URL }}
+          # Key Vault mode (all five, or none): the app fetches the model key from the vault itself.
+          # The client secret is the only secret of the five; the rest are identifiers.
+          PODC_AZURE_CLIENT_SECRET: ${{ secrets.PODC_AZURE_CLIENT_SECRET }}
+          PODC_AZURE_VAULT_URL: ${{ vars.PODC_AZURE_VAULT_URL }}
+          PODC_AZURE_VAULT_SECRET_NAME: ${{ vars.PODC_AZURE_VAULT_SECRET_NAME }}
+          PODC_AZURE_TENANT_ID: ${{ vars.PODC_AZURE_TENANT_ID }}
+          PODC_AZURE_CLIENT_ID: ${{ vars.PODC_AZURE_CLIENT_ID }}
           # Not secrets. Repository variables, so changing them needs no code change.
           # PODC_ENV and PODC_DEV_AUTH_ENABLED go together: the app refuses dev login unless
           # PODC_ENV is local or dev. Until real login (Zitadel) exists, "prod" + "false" means
@@ -134,6 +141,32 @@ jobs:
           # Claude Sonnet 5.5 rejects "disabled"; match the model above.
           PODC_ANTHROPIC_THINKING_OFF: ${{ vars.PODC_ANTHROPIC_THINKING_OFF || 'between_tools' }}
         run: |
+          # Where the model key comes from, decided before anything is written.
+          #  - Vault mode (all five PODC_AZURE_* settings): the app fetches the key from the Key
+          #    Vault and fetches it again when the gateway rejects it, so a rotated key needs no
+          #    redeploy.
+          #  - Fixed-key mode (none of them): the key is copied from the GitHub secret and goes
+          #    stale when the key is rotated.
+          # Never both: in the app a fixed key always beats the vault, so in vault mode the key
+          # line is left out completely.
+          vault_set=0
+          for value in "$PODC_AZURE_VAULT_URL" "$PODC_AZURE_VAULT_SECRET_NAME" \
+                       "$PODC_AZURE_TENANT_ID" "$PODC_AZURE_CLIENT_ID" "$PODC_AZURE_CLIENT_SECRET"; do
+            if [ -n "$value" ]; then
+              vault_set=$((vault_set + 1))
+            fi
+          done
+
+          if [ "$vault_set" -ne 0 ] && [ "$vault_set" -ne 5 ]; then
+            echo "::error::Only $vault_set of the five PODC_AZURE_* settings are set. Set all five (vault mode) or none (fixed key)."
+            exit 1
+          fi
+
+          if [ "$vault_set" -eq 0 ] && [ -z "$PODC_ANTHROPIC_API_KEY" ]; then
+            echo "::error::No model key. Set the five PODC_AZURE_* settings (vault mode) or the secret PODC_ANTHROPIC_API_KEY."
+            exit 1
+          fi
+
           cp deploy/compose.prod.yml "$DEPLOY_DIR/compose.prod.yml"
 
           umask 077
@@ -153,12 +186,25 @@ jobs:
           PODC_RETENTION_DAYS=30
 
           PODC_LLM_PROVIDER=${PODC_LLM_PROVIDER}
-          PODC_ANTHROPIC_API_KEY=${PODC_ANTHROPIC_API_KEY}
           PODC_ANTHROPIC_MODEL=${PODC_ANTHROPIC_MODEL}
           PODC_ANTHROPIC_GATEWAY_URL=${PODC_ANTHROPIC_GATEWAY_URL}
           PODC_ANTHROPIC_THINKING_OFF=${PODC_ANTHROPIC_THINKING_OFF}
           PODC_ANTHROPIC_TIMEOUT_S=30
           EOF
+
+          if [ "$vault_set" -eq 5 ]; then
+            {
+              printf 'PODC_AZURE_VAULT_URL=%s\n' "$PODC_AZURE_VAULT_URL"
+              printf 'PODC_AZURE_VAULT_SECRET_NAME=%s\n' "$PODC_AZURE_VAULT_SECRET_NAME"
+              printf 'PODC_AZURE_TENANT_ID=%s\n' "$PODC_AZURE_TENANT_ID"
+              printf 'PODC_AZURE_CLIENT_ID=%s\n' "$PODC_AZURE_CLIENT_ID"
+              printf 'PODC_AZURE_CLIENT_SECRET=%s\n' "$PODC_AZURE_CLIENT_SECRET"
+            } >> "$DEPLOY_DIR/.env"
+            echo "Model key source: Azure Key Vault (refetched automatically after a rejection)"
+          else
+            printf 'PODC_ANTHROPIC_API_KEY=%s\n' "$PODC_ANTHROPIC_API_KEY" >> "$DEPLOY_DIR/.env"
+            echo "Model key source: fixed key from the GitHub secret (goes stale when the key is rotated)"
+          fi
 
           chmod 600 "$DEPLOY_DIR/.env"
 
@@ -244,6 +290,45 @@ jobs:
           fi
 
           echo "$IMAGE_TAG" > "$DEPLOY_DIR/.last_good_tag"
+
+      - name: Check the model key (warning only)
+        shell: bash
+        run: |
+          compose() {
+            IMAGE_TAG="$IMAGE_TAG" docker compose -p pod-c -f "$COMPOSE_FILE" "$@"
+          }
+
+          # One tiny model call from inside the API container, with the container's own settings.
+          # It never fails the deploy (a dead key does not make the new image worse than the old
+          # one), but it turns a stale or rotated key into a visible warning here instead of a
+          # failed chat later. The output is a reason code only, never the key.
+          probe='
+          from app.llm import get_llm_client
+          from app.llm.base import LLMError, LLMRequest, Message
+
+          try:
+              get_llm_client().complete(
+                  LLMRequest(
+                      purpose="deploy-check",
+                      system="Reply with one word.",
+                      messages=[Message(role="user", content="hello")],
+                      max_tokens=20,
+                  )
+              )
+              print("OK")
+          except LLMError as exc:
+              print("FAILED:", exc)
+          '
+
+          result="$(compose exec -T api python -c "$probe" 2>&1 || true)"
+          echo "$result"
+
+          if printf '%s\n' "$result" | grep -qx 'OK'; then
+            echo "Model key OK."
+          else
+            reason="$(printf '%s\n' "$result" | tail -n 1)"
+            echo "::warning title=Model key check failed::${reason}. The deploy continues, but chats and reports will fail until the key is fixed. In vault mode check the vault secret and the Azure client secret; with a fixed key update the secret PODC_ANTHROPIC_API_KEY and redeploy."
+          fi
 
       - name: Remove old images
         shell: bash

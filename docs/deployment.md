@@ -25,6 +25,7 @@ It runs on every push to `main` (or by hand: Actions, "Deploy POD C", Run workfl
 | Install | Copies `compose.prod.yml` to the deploy folder and writes `.env` there (mode 600) from the GitHub secrets and variables below. |
 | Migrate and start | `alembic upgrade head`, then `docker compose up -d`. |
 | Verify | Up to 20 tries: the API container is healthy, `/readyz` answers inside it (so the database is reachable) and the worker answers a Celery ping (so Redis is reachable). On success the tag goes to `.last_good_tag`. On failure it prints the logs, starts the last good tag again if there is one, and fails the run. Database migrations are not rolled back. |
+| Model key check | One tiny model call from inside the API container. It **never fails the deploy** (a dead key does not make the new image worse than the old one), but it turns a stale or rotated key into a yellow warning on the run instead of a failed chat later. |
 | Clean up | Keeps the three newest `pod-c-app` tags and the last good one; only our own image is touched. |
 
 The deploy folder is `/data/Smart_Ops_Pod3/deploy` unless the repository variable `DEPLOY_DIR` says otherwise. It holds, on the server only: `compose.prod.yml`, `.env`, `.last_good_tag` and `certs/corp-root.crt`. None of these is in git.
@@ -52,20 +53,47 @@ Secrets (Settings, Secrets and variables, Actions). Never put these in git, in a
 |---|---|
 | `PODC_DATABASE_URL` | `postgresql+psycopg://podc:<password>@shared-postgres:5432/podc` |
 | `PODC_LLM_PROVIDER` | `anthropic` |
-| `PODC_ANTHROPIC_API_KEY` | the model key |
+| `PODC_ANTHROPIC_API_KEY` | the model key. Only used in fixed-key mode; see "The model key" below |
 | `PODC_ANTHROPIC_MODEL` | the gateway's model id |
 | `PODC_ANTHROPIC_GATEWAY_URL` | the gateway's URL |
-| `TRAINEE_DB_URL` | Pod D's PostgreSQL connection URL, stored as a GitHub secret; the assessment job uses it to upsert section-C scores |
+| `PODC_AZURE_CLIENT_SECRET` | the Azure app registration's client secret. Only for Key Vault mode |
+| `TRAINEE_DB_URL` | Pod D's PostgreSQL connection URL, stored as a GitHub secret; the assessment job uses it to upsert section-C scores. Use a least-privilege write role |
 
 Variables (optional; the defaults are shown):
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `PODC_AZURE_VAULT_URL`, `PODC_AZURE_VAULT_SECRET_NAME`, `PODC_AZURE_TENANT_ID`, `PODC_AZURE_CLIENT_ID` | unset | Key Vault mode (identifiers, not secrets). Set all four and the client secret above, or none |
 | `DEPLOY_DIR` | `/data/Smart_Ops_Pod3/deploy` | where the files above live |
 | `PODC_ANTHROPIC_THINKING_OFF` | `between_tools` | Claude Sonnet 5.5 rejects `disabled` |
 | `PODC_ENV` and `PODC_DEV_AUTH_ENABLED` | `prod` and `false` | see "Login" below. Change them together |
 
 The log level is `PODC_LOG_LEVEL` (default `INFO`).
+
+## The model key
+The gateway key can be rotated, and then it stops working: the gateway answers `401 token_not_found_in_db` and every chat fails with "the client could not reply". The deploy supports two ways to supply the key, and writes exactly one of them into `.env`:
+
+| Mode | When | Behaviour |
+|---|---|---|
+| **Key Vault** (preferred) | all five `PODC_AZURE_*` settings are set | The app fetches the key from the vault when it first needs it and keeps it in memory. When the gateway rejects it with a 401, the app drops the cached key, fetches it again and retries once, so a rotated key heals itself with no redeploy. The log shows `refetching the key from the Key Vault`. |
+| **Fixed key** | none of the five are set | The key is copied from the GitHub secret `PODC_ANTHROPIC_API_KEY`. After a rotation every call fails until the secret is updated and the deploy is re-run. The log shows `a fixed setting ... nothing newer to fetch`. |
+
+Rules the workflow enforces: all five or none (it stops with an error otherwise), and a model key must exist in one of the two modes. In Key Vault mode the key line is **left out of `.env` completely**, because a fixed key always beats the vault in the app. A blank `PODC_ANTHROPIC_API_KEY=` is read as "not set".
+
+Two things to watch in Key Vault mode:
+- **The Azure client secret expires.** When it does, the vault login fails (`vault login failed (HTTP 401)`) and every model call fails. Note its expiry date in a calendar and renew it before then.
+- **The vault must hold the new key.** If the gateway owner rotates the key but does not update the vault secret, refetching returns the same dead key.
+
+To switch to Key Vault mode:
+```
+gh variable set PODC_AZURE_VAULT_URL         --repo USTDevGama/Smart_Ops_Pod3 --body "https://<your-vault>.vault.azure.net"
+gh variable set PODC_AZURE_VAULT_SECRET_NAME --repo USTDevGama/Smart_Ops_Pod3 --body "<secret-name>"
+gh variable set PODC_AZURE_TENANT_ID         --repo USTDevGama/Smart_Ops_Pod3 --body "<tenant-id>"
+gh variable set PODC_AZURE_CLIENT_ID         --repo USTDevGama/Smart_Ops_Pod3 --body "<client-id>"
+gh secret set   PODC_AZURE_CLIENT_SECRET     --repo USTDevGama/Smart_Ops_Pod3
+gh workflow run "Deploy POD C" --repo USTDevGama/Smart_Ops_Pod3
+```
+The deploy's "Model key check" step then confirms the key works from inside the container. To go back to a fixed key, delete the five and re-run the deploy.
 
 ## Login
 There is no real login yet. With `PODC_ENV=prod` and `PODC_DEV_AUTH_ENABLED=false` every API call answers `401 login is not configured yet`, except `/healthz`, `/readyz` and `/api/v1/meta`. That is the intended state until the common UI and Zitadel exist (not built: `app/api/deps.py` still only reads the dev headers). Do not set `PODC_ENV=dev` with dev login on to "test" the deployed API: it lets anyone who can reach the API pick any role without a password, and other pods' containers share the `shared-services` network.
@@ -80,7 +108,7 @@ What that does and does not change:
 - `main` deploys on every push and is not protected. Consider requiring pull requests, or trigger by hand only until things are stable.
 - When the project ends: delete the deploy folder and rotate the database password and the model key.
 
-A safer later step is to keep only the Azure client secret in `.env` and let the app fetch the model key from the Key Vault at start-up (`PODC_AZURE_*`, already supported). A static key in a GitHub secret goes stale when the key is rotated.
+In Key Vault mode the `.env` holds the Azure client secret instead of the model key. It can read only the one vault secret, and it expires, so it is the smaller risk. See "The model key" above.
 
 ## Day to day
 Run these on the server in the deploy folder:
@@ -95,6 +123,6 @@ The API log shows `llm call purpose=... Ns` for each model call, and `agent ...`
 ## Known gaps
 - Real login (Zitadel) and the common UI are not built.
 - Before enabling Pod D sync, Zitadel auth must map the verified trainee identity to the existing Pod D `trainees.trainee_id` and store that ID as the session owner reference. Never use an untrusted UI-supplied ID.
-- Nothing here was run on the server when it was written: the first workflow run is the real test (`docker compose config`, the image build including the certificate step, the migration, the health check).
+- Key Vault mode has not run inside a container yet. The vault client (plain `httpx`) needs to reach Azure AD and the vault from there; it worked from the VM itself. The "Model key check" step on the first vault-mode deploy is the test.
 - The server's root disk (where Docker keeps images, build cache and the volume) was 75% full with about 8 GB free. The workflow removes only our own old tags; build cache is shared with the other pods and is not pruned. Tell the architect.
 - Shell settings on the shared `localadmin` account export `SSL_CERT_FILE` and `REQUESTS_CA_BUNDLE` for login shells. Run test commands with `env -u SSL_CERT_FILE -u REQUESTS_CA_BUNDLE`. The runner service does not read them.
