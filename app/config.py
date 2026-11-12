@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SAFE_DEV_AUTH_ENVS = {"local", "dev"}
@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Level for the app's own log lines (`llm call ... Ns`, `agent ... ok`); see app/main.py.
     log_level: str = "INFO"
     database_url: str = "postgresql+psycopg://podc:podc@localhost:5432/podc"
+    # Separate database owned by Pod D. Never log or serialize this secret.
+    trainee_db_url: SecretStr | None = Field(
+        default=None, validation_alias="TRAINEE_DB_URL"
+    )
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     blob_dir: str = "./storage"
@@ -59,6 +63,13 @@ class Settings(BaseSettings):
     dev_auth_enabled: bool = True
     # Local folder holding the program's confidential seed pack. Never inside this repo.
     seed_dir: str | None = None
+
+    @field_validator("trainee_db_url", mode="before")
+    @classmethod
+    def _empty_trainee_db_url_is_unset(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     def assert_safe_for_env(self) -> None:
         """The dev-only fake login must never be on outside local/dev."""

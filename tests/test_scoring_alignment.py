@@ -9,10 +9,12 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import SecretStr
 
 from app.api.deps import get_llm
 from app.db import models as m
 from app.llm import FakeLLM
+from app.scoring import pipeline
 from app.scoring.pipeline import (
     ASSESSMENT_FILE,
     AssessmentNotReadyError,
@@ -27,6 +29,15 @@ from tests.agent_fixtures import STRONG, opening_json, turn_json
 from tests.conftest import ANNA, load_sample, publish_sample_settings, ready_demand, ready_profile
 
 ANSWERS = 4
+
+
+@pytest.fixture(autouse=True)
+def disable_external_pod_d_sync(monkeypatch):
+    monkeypatch.setattr(
+        pipeline,
+        "get_settings",
+        lambda: SimpleNamespace(env="local", trainee_db_url=None),
+    )
 
 
 @pytest.fixture
@@ -114,6 +125,33 @@ def test_the_whole_job_writes_the_snapshot_and_all_report_files(ended_chat):
 
     names = sorted(p.name for p in (api.store.root / "reports" / str(session_id)).iterdir())
     assert names == [ASSESSMENT_FILE, "report.html", "report.md", "report.pdf"]
+
+
+def test_whole_job_syncs_pod_d_scores_using_the_session_owner_id(ended_chat, monkeypatch):
+    api, session_id = ended_chat
+    saved = []
+    monkeypatch.setattr(
+        pipeline,
+        "get_settings",
+        lambda: SimpleNamespace(
+            env="prod",
+            trainee_db_url=SecretStr("postgresql+psycopg://test"),
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "save_pod_d_result",
+        lambda result, url: saved.append((result, url)),
+    )
+
+    with api.factory() as db:
+        assess_and_render(db, session_id, _scoring_llm(), api.store)
+
+    assert len(saved) == 1
+    result, database_url = saved[0]
+    assert result.trainee_id == "anna"
+    assert result.C_scores == {"G06": 2, "G08": 4, "G10": 1}
+    assert database_url == "postgresql+psycopg://test"
 
 
 def test_a_retry_after_a_saved_score_renders_without_calling_the_model_again(ended_chat):

@@ -21,12 +21,14 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import models as m
 from app.db.session import get_engine
 from app.llm import LLMClient, get_llm_client
 from app.reports.generator import ReportArtifacts, generate_report
 from app.schemas import Assessment, Evaluation, PersonaConfig, ScoringConfig
 from app.schemas.enums import EndReason, SessionStatus, TurnRole
+from app.scoring.pod_d import build_pod_d_result, save_pod_d_result
 from app.scoring.processor import ScoringValidationContext, build_assessment, derive_handled
 from app.scoring.rubric import default_scoring_config, prompt_config
 from app.scoring.scorer import score_session
@@ -57,12 +59,35 @@ def assess_and_render(
     store: BlobStore,
     config: ScoringConfig | None = None,
 ) -> ReportArtifacts:
-    """Score (unless a snapshot is already saved), then write the report files."""
+    """Score, write the report, and sync its Pod D scores."""
     if store.exists(blob_key(session_id, ASSESSMENT_FILE)):
         log.info("assessment already saved for session %s; rendering only", session_id)
+        snapshot = json.loads(store.read(blob_key(session_id, ASSESSMENT_FILE)))
+        assessment = Assessment.model_validate(snapshot["assessment"])
     else:
-        assess_session(db, session_id, llm, store, config)
-    return render_report(db, session_id, store)
+        assessment = assess_session(db, session_id, llm, store, config)
+
+    report = render_report(db, session_id, store)
+    _sync_pod_d_scores(db, session_id, assessment)
+    return report
+
+
+def _sync_pod_d_scores(db: Session, session_id: UUID, assessment: Assessment) -> None:
+    settings = get_settings()
+    if settings.trainee_db_url is None:
+        if settings.env == "prod":
+            raise RuntimeError("TRAINEE_DB_URL must be configured in production")
+        log.info("Pod D score sync skipped: TRAINEE_DB_URL is not configured")
+        return
+
+    session = db.get(m.RoleplaySession, session_id)
+    if session is None:
+        raise AssessmentNotReadyError(f"session {session_id} was not found")
+
+    # The future Zitadel adapter must set this stored owner ref to the trusted Pod D trainee_id.
+    result = build_pod_d_result(assessment, trainee_id=session.trainee_ref)
+    save_pod_d_result(result, settings.trainee_db_url.get_secret_value())
+    log.info("Pod D scores saved for session %s", session_id)
 
 
 def assess_and_render_in_new_session(session_id: UUID) -> None:

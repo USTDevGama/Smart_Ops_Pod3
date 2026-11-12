@@ -55,6 +55,7 @@ Secrets (Settings, Secrets and variables, Actions). Never put these in git, in a
 | `PODC_ANTHROPIC_API_KEY` | the model key |
 | `PODC_ANTHROPIC_MODEL` | the gateway's model id |
 | `PODC_ANTHROPIC_GATEWAY_URL` | the gateway's URL |
+| `TRAINEE_DB_URL` | Pod D's PostgreSQL connection URL, stored as a GitHub secret; the assessment job uses it to upsert section-C scores |
 
 Variables (optional; the defaults are shown):
 
@@ -93,6 +94,7 @@ The API log shows `llm call purpose=... Ns` for each model call, and `agent ...`
 
 ## Known gaps
 - Real login (Zitadel) and the common UI are not built.
+- Before enabling Pod D sync, Zitadel auth must map the verified trainee identity to the existing Pod D `trainees.trainee_id` and store that ID as the session owner reference. Never use an untrusted UI-supplied ID.
 - Nothing here was run on the server when it was written: the first workflow run is the real test (`docker compose config`, the image build including the certificate step, the migration, the health check).
 - The server's root disk (where Docker keeps images, build cache and the volume) was 75% full with about 8 GB free. The workflow removes only our own old tags; build cache is shared with the other pods and is not pruned. Tell the architect.
 - Shell settings on the shared `localadmin` account export `SSL_CERT_FILE` and `REQUESTS_CA_BUNDLE` for login shells. Run test commands with `env -u SSL_CERT_FILE -u REQUESTS_CA_BUNDLE`. The runner service does not read them.

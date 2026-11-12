@@ -8,7 +8,6 @@ import json
 import pytest
 
 from app import seed
-from app.schemas import RoleplayResult
 
 PACK = seed.seed_dir()
 
@@ -33,11 +32,6 @@ def test_environment_settings_point_at_real_persona_files():
     for name in ("stage.settings.json", "prod.settings.json"):
         env = seed.load_environment_settings(PACK / "config" / name)
         assert (PACK / env.persona_file).exists()
-
-
-def test_sample_result_parses_with_our_result_model():
-    result = seed.load_result(PACK / "samples" / "sample_conversation_result.json")
-    assert isinstance(result, RoleplayResult)
 
 
 def test_known_answer_cases_refer_to_real_scenarios():

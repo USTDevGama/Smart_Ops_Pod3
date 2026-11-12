@@ -24,7 +24,7 @@ Pod C's agent for the Multi-Agent Training Evaluation Platform ("The Tough Clien
 2. **Profile.** A trainee uploads their resume (PDF, DOCX or TXT). The ingestion pipeline stores extracted content as JSON. The client uses the profile together with the shared demand and selected scenario.
 3. **The chat.** The client opens with a challenge, then reacts to each answer: vague answers move it one step tougher (steps 1 to 4), specific and honest answers ease it off. The session ends at the turn limit or when someone ends it.
 4. **The mark.** When the chat ends, a background job (`run_assessment`) sends the finished chat to a scoring model call that rates the trainee on four fixed weighted criteria and cites real exchanges. Plain code validates the output, derives `handled`, checks the model's evidence against code markers (from the saved per-turn evaluations, the resume and the demand), applies weights and cutoffs, and computes confidence. The result is saved as one JSON snapshot in blob storage.
-5. **Report and handoff.** The same job then turns that snapshot into Markdown, sanitized HTML and PDF files under `reports/<session_id>/` in blob storage. If the snapshot already exists (a retry), it skips the model call and only renders. Review APIs and Azure storage are not wired. The separate **roleplay-result** schema describes the external Pod D contract; `build_pod_d_result` maps validated criterion points to goal scores deterministically, without another LLM call. Delivery to Pod D is not wired and requires the authenticated trainee ID.
+5. **Report and handoff.** The same job then turns that snapshot into Markdown, sanitized HTML and PDF files under `reports/<session_id>/` in blob storage, then upserts the mapped section-C goal scores to Pod D's shared PostgreSQL database. If the snapshot already exists (a retry), it skips the model call and reuses the saved assessment. Goal scores are rounded to the integer 1–5 range accepted by Pod D's current table. Review APIs and Azure storage are not wired. The Pod D mapping is deterministic; it does not call another LLM.
 
 ## Where it fits in the platform
 ```
@@ -169,7 +169,7 @@ Real login and roles and cloud or Kubernetes deployment are deliberately out of 
 **Next:** how Pod D gets the saved report files (admins can now download them through the report endpoints); the review workflow and persistence; the real LLM client once API keys arrive; Azure storage, retries and the 30-day deletion job (it must also delete `reports/<session_id>/`); tuning the provisional confidence settings against human-scored cases.
 
 **Open questions for the TPM:**
-- Connect the required Pod D `trainee_id` to the authenticated Zitadel identity when auth is implemented.
+- Connect the Pod D `trainee_id` to a trusted Zitadel claim or server-side mapping before enabling Pod D sync in production.
 - Skills, weights and thresholds: are there official ones? Is there a human-scored set for calibration?
 - Is Claude Code an approved tool for the confidential seed pack?
 

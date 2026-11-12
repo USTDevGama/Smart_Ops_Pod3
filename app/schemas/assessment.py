@@ -105,7 +105,7 @@ class Assessment(BaseModel):
 
 
 PodDGoalId = Literal["G06", "G08", "G10"]
-PodDGoalScore = Annotated[float, Field(ge=0, le=5)]
+PodDGoalScore = Annotated[int, Field(strict=True, ge=1, le=5)]
 
 
 class RoleplayResult(BaseModel):

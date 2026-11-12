@@ -10,8 +10,8 @@
     "C_scores": {
       "additionalProperties": {
         "maximum": 5,
-        "minimum": 0,
-        "type": "number"
+        "minimum": 1,
+        "type": "integer"
       },
       "maxProperties": 3,
       "minProperties": 3,

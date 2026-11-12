@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from app.config import get_settings
-from app.schemas import EnvironmentSettings, PersonaConfig, RoleplayResult, ScenarioConfig
+from app.schemas import EnvironmentSettings, PersonaConfig, ScenarioConfig
 
 
 def seed_dir() -> Path | None:
@@ -33,5 +33,3 @@ def load_environment_settings(path: Path) -> EnvironmentSettings:
     return EnvironmentSettings.model_validate(_read(path))
 
 
-def load_result(path: Path) -> RoleplayResult:
-    return RoleplayResult.model_validate(_read(path))

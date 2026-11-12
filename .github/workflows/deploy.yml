@@ -120,6 +120,7 @@ jobs:
         shell: bash
         env:
           PODC_DATABASE_URL: ${{ secrets.PODC_DATABASE_URL }}
+          TRAINEE_DB_URL: ${{ secrets.TRAINEE_DB_URL }}
           PODC_LLM_PROVIDER: ${{ secrets.PODC_LLM_PROVIDER }}
           PODC_ANTHROPIC_API_KEY: ${{ secrets.PODC_ANTHROPIC_API_KEY }}
           PODC_ANTHROPIC_MODEL: ${{ secrets.PODC_ANTHROPIC_MODEL }}
@@ -142,6 +143,7 @@ jobs:
           PODC_INGEST_INLINE=false
 
           PODC_DATABASE_URL=${PODC_DATABASE_URL}
+          TRAINEE_DB_URL=${TRAINEE_DB_URL}
 
           PODC_REDIS_URL=redis://shared-redis:6379/0
           PODC_CELERY_BROKER_URL=redis://shared-redis:6379/1

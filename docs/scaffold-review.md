@@ -364,8 +364,8 @@ This session made 4 calls: 1 opening, 2 turns, 1 score.
 | `detail` | JSON, optional | what changed | `{"version_no":1}` | `{"final_score":73.8}` |
 | `created_at` | timestamp | when | `09:41` | `10:12` |
 
-### 4.13 What leaves the system: not a table
-The outgoing result (`RoleplayResult`) is **not stored as its own table**. It is built from the validated assessment and the authenticated trainee id. `samples/results/vendor_delay_result.json` shows its small payload: `trainee_id` plus `C_scores` for G06, G08 and G10. The goal scores are mapped deterministically from criterion points and scaled to 0-5.
+### 4.13 Pod D score handoff
+The outgoing result (`RoleplayResult`) is built from the validated assessment and authenticated trainee id, then upserted into Pod D's `trainee_profiles.trainee_scores`. `samples/results/vendor_delay_result.json` shows the payload before persistence: `trainee_id` plus integer `C_scores` for G06, G08 and G10. Scores map deterministically from criterion points, round half up, and clamp to the live database's 1-5 constraint.
 
 ### 4.14 Why we keep these in the database, who uses them, and the intuition
 
@@ -480,7 +480,7 @@ Used by both the tables and the schemas, so they always agree.
 **What leaves the system (the program's "roleplay-result" format):**
 | Class | What it is | Rules |
 |---|---|---|
-| `RoleplayResult` | `trainee_id` and `C_scores` for G06, G08 and G10 | Scores map C1+C3 to G06, C2 to G08, C4 to G10, then scale weighted points from 0-1 to 0-5 |
+| `RoleplayResult` | `trainee_id` and `C_scores` for G06, G08 and G10 | Scores map C1+C3 to G06, C2 to G08, C4 to G10, then round weighted points to integer 1-5 |
 
 ### `__init__.py` (47 lines)
 Re-exports all of the above so other code writes `from app.schemas import PersonaConfig`.
@@ -489,11 +489,11 @@ Re-exports all of the above so other code writes `from app.schemas import Person
 
 ## 6. The rest of the code
 
-### `app/config.py` (35 lines)
-All settings come from `PODC_*` environment variables: `env`, `database_url`, `redis_url`, `celery_broker_url`, `blob_dir`, `llm_provider` (default `fake`), `retention_days` (30), `max_llm_calls_per_session` (40), `dev_auth_enabled`, `seed_dir`. `assert_safe_for_env()` refuses to start if the dev fake login is on outside `local` or `dev`.
+### `app/config.py`
+Settings use `PODC_*` environment variables, except the separate Pod D connection secret `TRAINEE_DB_URL`. `assert_safe_for_env()` refuses to start if the dev fake login is on outside `local` or `dev`.
 
 ### `app/seed.py` (37 lines)
-Loads the confidential seed pack from the folder in `PODC_SEED_DIR`: `load_persona`, `load_scenarios`, `load_environment_settings`, `load_result`. Everything is validated against our schemas, so any mismatch between the pack and our model shows up immediately. The pack is never inside this repo.
+Loads the confidential seed pack from the folder in `PODC_SEED_DIR`: `load_persona`, `load_scenarios`, `load_environment_settings`. The pack is never inside this repo.
 
 ### `app/llm/`: the AI doorway
 | File | Contents |
@@ -524,14 +524,14 @@ Loads the confidential seed pack from the folder in `PODC_SEED_DIR`: `load_perso
 |---|---|---|
 | `test_schemas.py` | 11 | sample persona, scenario and scoring files are valid; weights must total 1; ladder order and range; extra fields ignored; turn limits; brief items need a source; AI-reply bounds |
 | `test_db_models.py` | 8 | exactly the 12 planned tables; each compiles for PostgreSQL; duplicate message positions rejected; escalation 0, 5 and 9 rejected; **evidence pointing at a non-existent turn is rejected**; a session works without a proposal |
-| `test_result_contract.py` | 10 | the sample result is valid; evidence turns must exist; 7 kinds of garbage rejected; the generated JSON schema agrees with the model |
+| `test_result_contract.py` | — | Pod D payload validation, deterministic score mapping, database upsert shape, and generated JSON schema |
 | `test_migrations.py` | 1 | the migration builds exactly the schema the models describe, and undoes cleanly |
 | `test_llm_fake.py` | 6 | scripted replies in order; structured replies parsed; wrong shape rejected; strict mode; streaming; the factory |
 | `test_api_roles.py` | 3 | admin allowed, trainee forbidden, missing or unknown role unauthorised |
 | `test_health.py` | 4 | `/healthz`, `/api/v1/meta`, `/readyz` follows the database, dev login refused in prod |
 | `test_workers_and_packages.py` | 8 | owner packages import; safe job defaults; jobs routed to the right queues |
 | `test_demo_data.py` | 7 | the example loader fills all 12 tables with the planned row counts, adds nothing when run twice, every evidence quote is really in its message, the mark follows the formula (73.8), the persona cites a real proposal chunk, empty JSON values are saved as real NULLs, and it refuses to run in prod |
-| `test_seed_pack.py` | 5 | **skipped unless `PODC_SEED_DIR` is set.** Our schemas fit the real seed pack: personas, scenarios, environment settings, the sample result, the known-answer cases. |
+| `test_seed_pack.py` | — | **skipped unless `PODC_SEED_DIR` is set.** Checks personas, scenarios, environment settings, and known-answer cases. |
 
 `conftest.py` provides an in-memory SQLite database with foreign keys switched on, so no Postgres or Docker is needed.
 
