@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SAFE_DEV_AUTH_ENVS = {"local", "dev"}
@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     dev_auth_enabled: bool = True
     # Local folder holding the program's confidential seed pack. Never inside this repo.
     seed_dir: str | None = None
+
+    @field_validator("anthropic_api_key", "azure_client_secret", mode="before")
+    @classmethod
+    def _blank_secret_is_unset(cls, value):
+        """A blank value (`PODC_ANTHROPIC_API_KEY=` in an env file) means "not set". Without this
+        it would count as a key, and because a direct key beats the Key Vault, one blank line
+        would silently switch the vault off and send an empty key to the model."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     def assert_safe_for_env(self) -> None:
         """The dev-only fake login must never be on outside local/dev."""
