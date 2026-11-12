@@ -84,7 +84,7 @@ def _get_token(http: httpx.Client, settings: Settings) -> str:
     except httpx.HTTPStatusError as exc:
         raise LLMError(f"vault login failed (HTTP {exc.response.status_code})") from None
     except httpx.HTTPError as exc:
-        raise LLMError(f"vault login failed ({type(exc).__name__})") from None
+        raise LLMError(f"vault login failed ({_why(exc)})") from None
     return response.json()["access_token"]
 
 
@@ -100,5 +100,17 @@ def _get_secret(http: httpx.Client, settings: Settings, token: str) -> str:
     except httpx.HTTPStatusError as exc:
         raise LLMError(f"secret fetch failed (HTTP {exc.response.status_code})") from None
     except httpx.HTTPError as exc:
-        raise LLMError(f"secret fetch failed ({type(exc).__name__})") from None
+        raise LLMError(f"secret fetch failed ({_why(exc)})") from None
     return response.json()["value"]
+
+
+def _why(exc: httpx.HTTPError) -> str:
+    """The exception type, and for a failed connection only, what the connection error said (a
+    certificate error, a name that did not resolve, a refused connection). Those messages come from
+    the socket and TLS layers and carry no request content, and they are what tells a missing
+    certificate from a blocked network. Every other error stays type-only."""
+    if isinstance(exc, httpx.ConnectError):
+        detail = " ".join(str(exc).split())[:120]
+        if detail:
+            return f"{type(exc).__name__}: {detail}"
+    return type(exc).__name__
