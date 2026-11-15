@@ -146,6 +146,9 @@ def test_generates_markdown_html_and_pdf_for_completed_session(db):
         in report.markdown
     )
     assert "## Criterion details" not in report.markdown
+    assert 'width="11%"' in report.html
+    assert 'width="10%"' in report.html
+    assert 'width="24%"' in report.html
     assert 'width="28%"' in report.html
     assert report.html.count('<th align="center"') == 7
     assert '<td align="left">Owns the delay</td>' in report.html

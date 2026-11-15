@@ -355,7 +355,7 @@ def render_html(markdown_text: str) -> tuple[str, str]:
 
 
 def _apply_score_table_layout(generated: str) -> str:
-    widths = (5, 24, 9, 12, 8, 14, 28)
+    widths = (5, 24, 11, 10, 10, 12, 28)
     header_alignments = ("center",) * len(widths)
     cell_alignments = ("center", "left", "center", "center", "center", "center", "left")
     table_match = re.search(r"<table>.*?</table>", generated, flags=re.DOTALL)
