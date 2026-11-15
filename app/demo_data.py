@@ -65,7 +65,10 @@ def load_demo_data(db: Session) -> dict[str, int]:
     if db.get(m.ConfigVersion, _id("cfg-persona")) is not None:
         return row_counts(db)  # already loaded
 
-    trainee_ref = "demo-trainee"
+    trainee_ref = "Demo Trainee"
+    trainee_id = "T-DEMO-01"
+    db.add(m.Trainee(trainee_id=trainee_id, display_name=trainee_ref))
+    db.flush()
 
     # --- settings: persona and scenario (both validated by their schemas) ------------------
     persona_cfg = PersonaConfig.model_validate(_load("personas/ms_verma_strict.json"))
@@ -98,6 +101,7 @@ def load_demo_data(db: Session) -> dict[str, int]:
     sha = hashlib.sha256(raw).hexdigest()
     profile = m.Profile(
         id=_id("profile"), owner_ref=trainee_ref, filename="sample_resume.txt",
+        trainee_id=trainee_id,
         file_type=FileType.TXT, sha256=sha, blob_uri=f"storage/{sha[:12]}.txt",
         status=IngestStatus.READY, content={"text": raw.decode("utf-8").strip()},
         created_at=_at(25),
@@ -108,12 +112,14 @@ def load_demo_data(db: Session) -> dict[str, int]:
     # --- two sessions on the profile: S1 finished, S2 still open -----------------------------
     s1 = m.RoleplaySession(
         id=_id("session-1"), trainee_ref=trainee_ref, profile_id=profile.id,
+        trainee_id=trainee_id,
         persona_version_id=persona.id, demand_id=demand.id,
         status=SessionStatus.ENDED,
         end_reason=EndReason.TRAINEE_ENDED, started_at=_at(0), ended_at=_at(6),
     )
     s2 = m.RoleplaySession(
         id=_id("session-2"), trainee_ref=trainee_ref, profile_id=profile.id,
+        trainee_id=trainee_id,
         persona_version_id=persona.id, demand_id=demand.id,
         status=SessionStatus.ACTIVE,
         started_at=_at(30),

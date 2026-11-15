@@ -43,6 +43,8 @@ class TranscriptExchange:
 @dataclass(frozen=True)
 class ReportData:
     session_id: str
+    trainee_name: str
+    trainee_id: str | None
     persona_version: str
     ended_at: datetime
     end_reason: str
@@ -172,6 +174,8 @@ def load_report_data(
     end_reason = session.end_reason.value if session.end_reason else "unknown"
     return ReportData(
         session_id=str(session.id),
+        trainee_name=session.trainee_ref,
+        trainee_id=session.trainee_id,
         persona_version=persona.version or f"{persona_version.key} v{persona_version.version_no}",
         ended_at=session.ended_at,
         end_reason=_END_REASON_LABELS.get(end_reason, end_reason.replace("_", " ")),
@@ -213,6 +217,8 @@ def render_markdown(data: ReportData) -> str:
         "",
         (
             f"Session: {_md_text(data.session_id)} | "
+            f"Trainee name: {_md_text(data.trainee_name)} | "
+            f"Trainee ID: {_md_text(data.trainee_id or 'Not recorded')} | "
             f"Persona: {_md_text(data.persona_version)} | "
             f"Ended: {_md_text(data.end_reason)} | "
             f"Date: {data.ended_at.strftime('%d %b %Y')}"

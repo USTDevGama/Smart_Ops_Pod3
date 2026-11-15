@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SAMPLES = ROOT / "samples"
 
 ADMIN = {"X-Dev-User": "admin1", "X-Dev-Role": "admin"}
-ANNA = {"X-Dev-User": "anna", "X-Dev-Role": "trainee"}
-BEN = {"X-Dev-User": "ben", "X-Dev-Role": "trainee"}
+ANNA = {"X-Dev-User": "anna", "X-Dev-Role": "trainee", "X-Dev-Trainee-Id": "T-1001"}
+BEN = {"X-Dev-User": "ben", "X-Dev-Role": "trainee", "X-Dev-Trainee-Id": "T-1002"}
 
 
 def load_sample(relative: str) -> dict:
@@ -76,8 +76,16 @@ def api(tmp_path, monkeypatch):
 def ready_profile(api, owner_ref: str = "anna") -> str:
     """A trainee profile that is already ingested (a ready row, no file needed)."""
     with api.factory() as db:
+        trainee_id = {"anna": "T-1001", "ben": "T-1002"}.get(owner_ref)
+        if trainee_id:
+            trainee = db.get(models.Trainee, trainee_id)
+            if trainee is None:
+                db.add(models.Trainee(trainee_id=trainee_id, display_name=owner_ref))
+                db.flush()
         row = models.Profile(
-            owner_ref=owner_ref, filename="profile.txt", file_type=FileType.TXT,
+            owner_ref=owner_ref,
+            trainee_id=trainee_id,
+            filename="profile.txt", file_type=FileType.TXT,
             sha256=uuid.uuid4().hex * 2, blob_uri="none", status=IngestStatus.READY,
             content={"text": "Backend engineer. Led a billing rewrite; one service shipped late."},
         )

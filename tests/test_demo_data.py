@@ -7,7 +7,12 @@ from app.db import models as m
 from app.db.base import Base
 
 EXPECTED = {
-    "config_version": 2, "demand_document": 1, "profile": 1, "session": 2, "turn": 6,
+    "config_version": 2,
+    "demand_document": 1,
+    "profile": 1,
+    "session": 2,
+    "trainee": 1,
+    "turn": 6,
 }
 
 

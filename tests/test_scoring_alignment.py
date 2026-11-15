@@ -138,8 +138,8 @@ def test_whole_job_syncs_pod_d_scores_using_the_session_owner_id(ended_chat, mon
         pipeline,
         "get_settings",
         lambda: SimpleNamespace(
-            env="prod",
-            dev_auth_enabled=False,
+            env="dev",
+            dev_auth_enabled=True,
             trainee_db_url=SecretStr("postgresql+psycopg://test"),
         ),
     )
@@ -154,27 +154,17 @@ def test_whole_job_syncs_pod_d_scores_using_the_session_owner_id(ended_chat, mon
 
     assert len(saved) == 1
     result, database_url = saved[0]
-    assert result.trainee_id == "anna"
+    assert result.trainee_id == "T-1001"
     assert result.C_scores == {"G06": 2, "G08": 4, "G10": 1}
     assert database_url == "postgresql+psycopg://test"
 
 
-@pytest.mark.parametrize(
-    ("env", "dev_auth_enabled"),
-    [
-        ("local", False),
-        ("dev", True),
-        ("dev", False),
-    ],
-)
-def test_pod_d_sync_does_not_connect_outside_production_or_with_dev_auth(
-    ended_chat, monkeypatch, env, dev_auth_enabled
-):
+def test_pod_d_sync_skips_when_database_url_is_not_configured(ended_chat, monkeypatch):
     api, session_id = ended_chat
     settings = SimpleNamespace(
-        env=env,
-        dev_auth_enabled=dev_auth_enabled,
-        trainee_db_url=SecretStr("postgresql+psycopg://test"),
+        env="dev",
+        dev_auth_enabled=True,
+        trainee_db_url=None,
     )
     saved = []
     monkeypatch.setattr(pipeline, "get_settings", lambda: settings)

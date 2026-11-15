@@ -25,6 +25,7 @@ from app.schemas.enums import (
 )
 from app.sessions.hooks import on_session_ended
 from app.sessions.limits import allowed_turns, clamp_level
+from app.trainees import upsert_trainee
 
 
 class Loaded:
@@ -77,7 +78,7 @@ class Loaded:
 
 def get_visible(db: Session, session_id: UUID, user: CurrentUser) -> m.RoleplaySession:
     row = db.get(m.RoleplaySession, session_id)
-    if row is None or not can_see(user, row.trainee_ref):
+    if row is None or not can_see(user, row.trainee_ref, row.trainee_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
     return row
 
@@ -105,13 +106,17 @@ def start_session(
     if not published(db, ConfigKind.SCENARIO):
         raise HTTPException(status.HTTP_409_CONFLICT, "no scenarios have been loaded")
     profile = db.get(m.Profile, profile_id)
-    if profile is None or not can_see(user, profile.owner_ref):
+    if profile is None or not can_see(user, profile.owner_ref, profile.trainee_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
     if profile.status != IngestStatus.READY:
         raise HTTPException(status.HTTP_409_CONFLICT, "the profile is not ready yet")
 
+    if user.trainee_id is not None:
+        upsert_trainee(db, user.trainee_id, user.display_name)
+
     session = m.RoleplaySession(
-        trainee_ref=user.user_ref,
+        trainee_ref=user.display_name,
+        trainee_id=user.trainee_id,
         profile_id=profile_id,
         persona_version_id=persona.id,
         demand_id=demand.id,
@@ -198,7 +203,7 @@ def _mark_ended(session: m.RoleplaySession, reason: EndReason) -> None:
 
 def end_session(db: Session, session: m.RoleplaySession, user: CurrentUser) -> m.RoleplaySession:
     if session.status == SessionStatus.ACTIVE:
-        by_admin = user.role == Role.ADMIN and user.user_ref != session.trainee_ref
+        by_admin = user.role == Role.ADMIN
         _mark_ended(session, EndReason.ADMIN_ENDED if by_admin else EndReason.TRAINEE_ENDED)
         db.commit()
         on_session_ended(session.id)

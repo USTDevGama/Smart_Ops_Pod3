@@ -19,7 +19,10 @@ client = TestClient(app)
 
 
 def _headers(role: str) -> dict:
-    return {"X-Dev-User": "tester", "X-Dev-Role": role}
+    headers = {"X-Dev-User": "tester", "X-Dev-Role": role}
+    if role == "trainee":
+        headers["X-Dev-Trainee-Id"] = "T-TEST"
+    return headers
 
 
 def test_admin_allowed():

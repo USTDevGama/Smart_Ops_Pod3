@@ -23,7 +23,7 @@ EXPECTED_TABLES = {"config_version", "profile", "demand_document", "session", "t
 
 
 def test_exactly_the_planned_tables():
-    assert set(Base.metadata.tables) == EXPECTED_TABLES
+    assert set(Base.metadata.tables) == EXPECTED_TABLES | {"trainee"}
 
 
 def test_every_table_compiles_for_postgres():

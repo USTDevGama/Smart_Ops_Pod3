@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.agent.engine import TurnEngine, get_engine
@@ -50,6 +50,7 @@ class TurnOut(BaseModel):
 class SessionOut(BaseModel):
     id: UUID
     trainee_ref: str
+    trainee_id: str | None = None
     profile_id: UUID | None
     persona: VersionRef
     demand_id: UUID | None
@@ -83,6 +84,7 @@ def _session_fields(loaded: Loaded) -> dict:
     return {
         "id": s.id,
         "trainee_ref": s.trainee_ref,
+        "trainee_id": s.trainee_id,
         "profile_id": s.profile_id,
         "persona": VersionRef(
             key=loaded.persona_version.key, version_no=loaded.persona_version.version_no
@@ -119,7 +121,9 @@ def create_session(
 @router.get("/sessions", response_model=list[SessionOut])
 def list_sessions(
     status: SessionStatus | None = None,
-    trainee_ref: str | None = Query(default=None, description="admins only"),
+    trainee_ref: str | None = Query(
+        default=None, description="admins may search by trainee name or ID"
+    ),
     page: Paging = Depends(paging),
     user: CurrentUser = Depends(any_user),
     db: Session = Depends(get_db),
@@ -127,9 +131,14 @@ def list_sessions(
     query = select(m.RoleplaySession).order_by(m.RoleplaySession.started_at.desc())
     if user.role == Role.ADMIN:
         if trainee_ref:
-            query = query.where(m.RoleplaySession.trainee_ref == trainee_ref)
+            query = query.where(
+                or_(
+                    m.RoleplaySession.trainee_ref.ilike(f"%{trainee_ref}%"),
+                    m.RoleplaySession.trainee_id == trainee_ref,
+                )
+            )
     else:
-        query = query.where(m.RoleplaySession.trainee_ref == user.user_ref)
+        query = query.where(m.RoleplaySession.trainee_id == user.trainee_id)
     if status:
         query = query.where(m.RoleplaySession.status == status)
     rows = db.scalars(query.limit(page.limit).offset(page.offset)).all()
@@ -157,7 +166,8 @@ def send_turn(
     Sending the same Idempotency-Key again returns the stored reply and saves nothing new.
     """
     session = service.get_visible(db, session_id, user)
-    if session.trainee_ref != user.user_ref:  # even an admin cannot speak for a trainee
+    if user.role != Role.TRAINEE or session.trainee_id != user.trainee_id:
+        # Admins cannot speak for a trainee, and owners are identified by their stable ID.
         raise HTTPException(404, "session not found")
     result = service.take_turn(db, engine, session, body.content.strip(), idempotency_key)
 

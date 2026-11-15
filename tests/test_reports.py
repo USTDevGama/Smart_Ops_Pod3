@@ -56,6 +56,8 @@ def _assessment(**overrides) -> ValidatedAssessment:
 
 
 def _ended_session(db, *, status=SessionStatus.ENDED, unsafe_text=False):
+    db.add(m.Trainee(trainee_id="T-REPORT", display_name="report-test-user"))
+    db.flush()
     persona = m.ConfigVersion(
         kind=ConfigKind.PERSONA,
         key="strict",
@@ -74,6 +76,7 @@ def _ended_session(db, *, status=SessionStatus.ENDED, unsafe_text=False):
     db.flush()
     session = m.RoleplaySession(
         trainee_ref="report-test-user",
+        trainee_id="T-REPORT",
         persona_version_id=persona.id,
         status=status,
         end_reason=EndReason.TURN_CAP if status == SessionStatus.ENDED else None,
@@ -124,7 +127,10 @@ def test_generates_markdown_html_and_pdf_for_completed_session(db):
     report = generate_report(db, session.id, _assessment())
 
     assert "Overall score: **45.0 / 100**" in report.markdown
-    assert "Persona: strict-1.0 | Ended: turn limit reached | Date:" in report.markdown
+    assert (
+        "Trainee name: report-test-user | Trainee ID: T-REPORT | "
+        "Persona: strict-1.0 | Ended: turn limit reached | Date:"
+    ) in report.markdown
     assert "Rubric:" not in report.markdown
     assert (
         "| C2 | Gives a prevention plan | 50% | not met | 0.2 | 60 | "

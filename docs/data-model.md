@@ -1,14 +1,14 @@
 # Data model
 
-The system remembers things in **5 tables** (PostgreSQL in real use, SQLite in tests). This page explains each table, each column and why it is there. The source of truth is `app/db/models.py`. The migration is `alembic/versions/0001_initial.py`, which creates exactly these 5 tables (it replaces the earlier migrations, since nothing is deployed yet). If you ran an older version, delete your local database and run `alembic upgrade head` again.
+The system remembers things in **6 tables** (PostgreSQL in real use, SQLite in tests). This page explains each table, each column and why it is there. The source of truth is `app/db/models.py`; migrations `0001_initial.py` and `0002_trainee_identity.py` create the schema.
 
-**What was removed, and why.** The tables for users, scoring, review, reports, the AI-call log and the audit log are not there (they were in the first draft of the schema): `app_user`, `assessment`, `assessment_evidence`, `review`, `report`, `llm_call_log`, `audit_log`. The current plan does not restore dedicated scoring, review, or report tables. Scoring and reports use the pinned settings and transcript as inputs; report artifacts are produced separately. If durable review history or score snapshots become a requirement, decide how to store them before adding schema or migrations. Shared scoring and result contracts live in `app/schemas/`.
+**What is not stored.** There are no dedicated scoring, review, report, AI-call log, or audit-log tables. Scoring and reports use the pinned settings and transcript; report artifacts are produced separately. The `trainee` table stores the canonical ID and current display name; session/profile rows keep the name entered when they were created.
 Plain-words key:
 - **id**: every table has one. A unique row number (a UUID).
 - **-> table**: this column points at a row in another table (a "foreign key"). The database refuses a value that does not exist there.
 - **JSON**: a column holding a small structured document instead of a single value.
 - **Never edited**: rows that are only ever added, so the record cannot be quietly changed.
-- **`*_ref`**: a plain text name of the logged-in user (the `X-Dev-User` header for now). There is no user table; real login arrives later.
+- **`*_ref`**: a display name captured from the dev login. Stable trainee ownership uses the `trainee_id` foreign key.
 
 ## What the system is for (architect call, 05-Nov)
 A strict-client round, in effect a managerial round. The agent compares the **demand** (what the project needs, an admin uploads it; it comes from the Gama team) with the trainee's **profile** (their resume, uploaded by the trainee), and asks questions that fit both. It gets tougher or easier by itself depending on how the trainee answers, choosing from a one-time dataset of **scenarios**. The technical interview is a different agent, and the trainees' training history is a background process. Neither is ours.
@@ -26,11 +26,16 @@ Still open: whether the scenario dataset should instead live in the agent's own 
 ```mermaid
 erDiagram
   config_version ||--o{ session : "persona version"
+  trainee ||--o{ session : "trainee ID"
+  trainee ||--o{ profile : "trainee ID"
   profile ||--o{ session : "the trainee's resume"
   demand_document ||--o{ session : "the demand in force"
   session ||--o{ turn : "chat messages"
 ```
 Scenarios are in `config_version` too, but a session does not point at one: the agent reads them all.
+
+### `trainee` - canonical trainee IDs
+`trainee_id` is the primary key and matches the ID used for Pod D score rows. `display_name` is the latest name entered for that ID. A session separately stores the name used when that chat started, so admins can see the name and ID together in historical reviews. IDs are accepted as entered in dev auth; there is no lookup/verification.
 
 ## Settings
 
@@ -50,7 +55,8 @@ One table holds both kinds, because they work the same way: each change saves a 
 ### `profile` - a trainee's resume
 | Column | Why it is there |
 |---|---|
-| `owner_ref` | Whose file it is (the login user). Access control: a trainee sees only their own. |
+| `owner_ref` | Name entered at login, preserved for display. |
+| `trainee_id` -> `trainee` | Stable owner identity used for access control. Older profiles may have no ID until explicitly mapped. |
 | `filename`, `file_type` | `filename` for display. `file_type` (`pdf`, `docx`, `txt`) picks the right reader. |
 | `sha256` | A fingerprint of the file. Spots a duplicate upload so we reuse the earlier one. |
 | `blob_uri` | Where the original file is stored (a folder in development). The file is kept out of the database. |
@@ -67,7 +73,8 @@ Same idea as `profile`, but it is master data, not personal: `uploaded_by` (the 
 ### `session` - one roleplay run by one trainee
 | Column | Why it is there |
 |---|---|
-| `trainee_ref` | Who is playing (the login user). |
+| `trainee_ref` | Name entered at login, preserved for this session and admin review. |
+| `trainee_id` -> `trainee` | Stable identity used for ownership checks and Pod D score sync; nullable for legacy sessions. |
 | `profile_id` -> `profile` | The trainee's profile. The API requires one that is `ready`; the column can be empty only on old rows. |
 | `persona_version_id` -> `config_version` | The exact persona version used. |
 | `demand_id` -> `demand_document` | The demand document the chat started with. |
@@ -90,7 +97,7 @@ The full record of the conversation, and what any later score will be traced bac
 | `created_at` | Order and timing. |
 
 ## What we deliberately do not store
-- Passwords, names or emails.
+- Passwords or emails. A display name is stored for trainee/session review.
 - API keys.
 - Chunks of the uploaded files, or citations to them (the documents are short and go to the agent whole).
 - A separate copy of the "current escalation level". It is worked out from the saved turns, so there is nothing to get out of sync.

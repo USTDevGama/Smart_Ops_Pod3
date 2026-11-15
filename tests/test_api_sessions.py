@@ -241,6 +241,28 @@ def test_people_only_see_their_own_sessions(chat):
     assert _send(api, session_id, headers=ADMIN).status_code == 404  # admins cannot speak for them
 
 
+def test_trainee_id_is_the_owner_key_even_when_the_login_name_changes(chat):
+    api, use = chat
+    use([output()])
+    profile_id = ready_profile(api, "anna")
+    started = api.client.post(
+        "/api/v1/sessions",
+        headers=ANNA,
+        json=START | {"profile_id": profile_id},
+    )
+    assert started.status_code == 201
+    session_id = started.json()["id"]
+
+    renamed_login = ANNA | {"X-Dev-User": "Anna New Name"}
+
+    assert _get(api, session_id, headers=renamed_login).status_code == 200
+    profiles = api.client.get("/api/v1/profiles", headers=renamed_login).json()
+    assert [profile["id"] for profile in profiles] == [profile_id]
+    admin_session = api.client.get("/api/v1/sessions", headers=ADMIN).json()[0]
+    assert admin_session["trainee_ref"] == "anna"
+    assert admin_session["trainee_id"] == "T-1001"
+
+
 def test_only_admins_see_the_judgement_of_each_answer(chat):
     api, use = chat
     use([output()])

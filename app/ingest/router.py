@@ -13,6 +13,7 @@ from app.db import models as m
 from app.ingest.uploads import read_upload
 from app.schemas.enums import FileType, IngestStatus, Role
 from app.storage import BlobStore, get_blob_store
+from app.trainees import upsert_trainee
 from app.workers.dispatch import enqueue_profile_ingest
 
 router = APIRouter(prefix="/api/v1", tags=["profiles"])
@@ -29,6 +30,7 @@ class ProfileOut(BaseModel):
     error: str | None
     created_at: datetime
     owner_ref: str
+    trainee_id: str | None = None
 
 
 class ProfileDetail(ProfileOut):
@@ -37,7 +39,7 @@ class ProfileDetail(ProfileOut):
 
 def _owned(db: Session, profile_id: UUID, user: CurrentUser) -> m.Profile:
     profile = db.get(m.Profile, profile_id)
-    if profile is None or not can_see(user, profile.owner_ref):
+    if profile is None or not can_see(user, profile.owner_ref, profile.trainee_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
     return profile
 
@@ -52,9 +54,14 @@ def upload_profile(
 ):
     """Save the file, queue the ingest job, return 202. Poll GET /profiles/{id} until ready."""
     upload = read_upload(file)
+    if user.trainee_id is not None:
+        upsert_trainee(db, user.trainee_id, user.display_name)
+        owner_filter = m.Profile.trainee_id == user.trainee_id
+    else:
+        owner_filter = m.Profile.owner_ref == user.user_ref
     same = db.scalar(
         select(m.Profile).where(
-            m.Profile.owner_ref == user.user_ref,
+            owner_filter,
             m.Profile.sha256 == upload.sha256,
             m.Profile.status != IngestStatus.FAILED,
         )
@@ -64,7 +71,8 @@ def upload_profile(
         return same
 
     profile = m.Profile(
-        owner_ref=user.user_ref,
+        owner_ref=user.display_name,
+        trainee_id=user.trainee_id,
         filename=upload.filename,
         file_type=upload.file_type,
         sha256=upload.sha256,
@@ -88,9 +96,12 @@ def list_profiles(
     query = select(m.Profile).order_by(m.Profile.created_at.desc())
     if user.role == Role.ADMIN:
         if owner_ref:
-            query = query.where(m.Profile.owner_ref == owner_ref)
+            query = query.where(
+                (m.Profile.owner_ref.ilike(f"%{owner_ref}%"))
+                | (m.Profile.trainee_id == owner_ref)
+            )
     else:
-        query = query.where(m.Profile.owner_ref == user.user_ref)
+        query = query.where(m.Profile.trainee_id == user.trainee_id)
     return db.scalars(query.limit(page.limit).offset(page.offset)).all()
 
 

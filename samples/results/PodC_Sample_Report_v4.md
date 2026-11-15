@@ -1,6 +1,6 @@
 # Stakeholder Roleplay Assessment
 
-Session: sess-C-0001 | Persona: strict-1.0 | Ended: objections exhausted | Date: 03 Nov 2026
+Session: sess-C-0001 | Trainee name: Sample Trainee | Trainee ID: T-01 | Persona: strict-1.0 | Ended: objections exhausted | Date: 03 Nov 2026
 
 ## Result
 

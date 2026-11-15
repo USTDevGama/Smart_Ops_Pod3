@@ -1,7 +1,8 @@
 """Dev-only fake login. Real login (an identity provider) is parked; see plan section 6.
 
-Send `X-Dev-User: <name>` and `X-Dev-Role: trainee|admin|integrator`. Every endpoint should
-already use `require_role`, so plugging in real login later only replaces `current_user`.
+Send `X-Dev-User: <name>`, `X-Dev-Role: trainee|admin|integrator`, and for trainees
+`X-Dev-Trainee-Id: <id>`. Every endpoint should already use `require_role`, so plugging in real
+login later only replaces `current_user`.
 """
 
 from collections.abc import Iterator
@@ -19,15 +20,20 @@ from app.schemas.enums import Role
 
 @dataclass(frozen=True)
 class CurrentUser:
+    # Stable identity key for trainees; display name for admin actors.
     user_ref: str
     role: Role
+    display_name: str
+    trainee_id: str | None = None
 
 
 def current_user(
     x_dev_user: str | None = Header(default=None),
     x_dev_role: str | None = Header(default=None),
+    x_dev_trainee_id: str | None = Header(default=None),
 ) -> CurrentUser:
-    if not get_settings().dev_auth_enabled:
+    settings = get_settings()
+    if not settings.dev_auth_enabled:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "login is not configured yet")
     if not x_dev_user or not x_dev_role:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing X-Dev-User / X-Dev-Role")
@@ -35,7 +41,25 @@ def current_user(
         role = Role(x_dev_role)
     except ValueError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "unknown role") from None
-    return CurrentUser(user_ref=x_dev_user, role=role)
+
+    display_name = x_dev_user.strip()
+    if not display_name:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "name must not be blank")
+    if role == Role.TRAINEE:
+        trainee_id = x_dev_trainee_id.strip() if x_dev_trainee_id else ""
+        if not trainee_id and settings.env == "local" and settings.trainee_db_url is None:
+            trainee_id = display_name  # local-only compatibility for the retired UI/test client
+        if not trainee_id or len(trainee_id) > 64:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "a trainee must provide a valid X-Dev-Trainee-Id"
+            )
+        return CurrentUser(
+            user_ref=trainee_id,
+            role=role,
+            display_name=display_name,
+            trainee_id=trainee_id,
+        )
+    return CurrentUser(user_ref=display_name, role=role, display_name=display_name)
 
 
 def require_role(*allowed: Role):
@@ -47,9 +71,13 @@ def require_role(*allowed: Role):
     return dependency
 
 
-def can_see(user: CurrentUser, owner_ref: str) -> bool:
-    """Trainees see only their own rows; admins see everything."""
-    return user.role == Role.ADMIN or user.user_ref == owner_ref
+def can_see(
+    user: CurrentUser, owner_ref: str, owner_trainee_id: str | None = None
+) -> bool:
+    """Trainees see rows with their ID; admins see everything."""
+    return user.role == Role.ADMIN or (
+        user.trainee_id is not None and user.trainee_id == owner_trainee_id
+    )
 
 
 def get_db() -> Iterator[Session]:

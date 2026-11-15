@@ -35,4 +35,11 @@ def test_upgrade_matches_models(tmp_path):
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
     assert diff == []
     tables = set(inspect(engine).get_table_names()) - {"alembic_version"}
-    assert tables == {"config_version", "profile", "demand_document", "session", "turn"}
+    assert tables == {
+        "config_version",
+        "profile",
+        "demand_document",
+        "session",
+        "turn",
+        "trainee",
+    }

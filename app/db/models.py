@@ -1,8 +1,8 @@
-"""The 5 tables. Only Dev D writes migrations for changes here.
+"""The Pod C database tables.
 
-Scoring, review, reports, users, the AI-call log and the audit log are not stored in dedicated
-tables. Scoring and reports use the session, pinned configuration, and turns as inputs. Review
-history or score snapshots would need a separate storage decision and migration.
+Scoring, review, reports, the AI-call log and the audit log are not stored in dedicated tables.
+Scoring and reports use the session, pinned configuration, and turns as inputs. Review history or
+score snapshots would need a separate storage decision and migration.
 """
 
 import uuid
@@ -46,13 +46,24 @@ class ConfigVersion(Base):
     created_at: Mapped[datetime] = created_at_col()
 
 
+class Trainee(Base):
+    """Canonical trainee identity shared by profiles and roleplay sessions."""
+
+    __tablename__ = "trainee"
+
+    trainee_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = created_at_col()
+
+
 class Profile(Base):
     """A trainee's uploaded resume. Whatever the pipeline extracts is kept as JSON."""
 
     __tablename__ = "profile"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    owner_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
+    owner_ref: Mapped[str] = mapped_column(String(64), index=True)  # name entered at login
+    trainee_id: Mapped[str | None] = mapped_column(ForeignKey("trainee.trainee_id"), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     file_type: Mapped[FileType] = mapped_column(enum_col(FileType, "file_type"))
     sha256: Mapped[str] = mapped_column(String(64), index=True)
@@ -89,7 +100,8 @@ class RoleplaySession(Base):
     __tablename__ = "session"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    trainee_ref: Mapped[str] = mapped_column(String(64), index=True)  # login user (X-Dev-User)
+    trainee_ref: Mapped[str] = mapped_column(String(64), index=True)  # name entered at login
+    trainee_id: Mapped[str | None] = mapped_column(ForeignKey("trainee.trainee_id"), index=True)
     # The trainee's profile. The API requires it for new sessions; old rows may be empty. No
     # cascade: the purge job must not delete a profile still used by a live session.
     profile_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("profile.id"))

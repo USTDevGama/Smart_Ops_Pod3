@@ -21,9 +21,9 @@ conversation-agent component. The separate `docs/roleplay_result.schema.json` do
 outgoing Pod D result contract. Pod C maps C1+C3 to G06, C2 to G08, and C4 to G10, then scales
 the weighted criterion points from 0-1 to integer scores 1-5 (round-half-up; zero clamps to 1
 for the current Pod D column constraint). This mapping is deterministic and does not call an
-LLM. The post-session job upserts scores to `trainee_profiles.trainee_scores` only in production
-with dev auth disabled; the verified Pod D `trainee_id` must be available as the session owner
-reference.
+LLM. The post-session job upserts scores to `trainee_profiles.trainee_scores` whenever
+`TRAINEE_DB_URL` is configured, using the trainee ID stored on the session. Dev-login IDs are not
+validated.
 
 The overall score is the weighted sum of criterion points multiplied by 100. Confidence weights,
 status cutoffs and other confidence parameters in `scoring/default.json` are provisional and must

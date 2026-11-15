@@ -57,7 +57,7 @@ Secrets (Settings, Secrets and variables, Actions). Never put these in git, in a
 | `PODC_ANTHROPIC_MODEL` | the gateway's model id |
 | `PODC_ANTHROPIC_GATEWAY_URL` | the gateway's URL |
 | `PODC_AZURE_CLIENT_SECRET` | the Azure app registration's client secret. Only for Key Vault mode |
-| `TRAINEE_DB_URL` | Pod D's PostgreSQL connection URL, stored as a GitHub secret; the assessment job uses it to upsert section-C scores. Use a least-privilege write role |
+| `TRAINEE_DB_URL` | Pod D's PostgreSQL connection URL, stored as a GitHub secret; the assessment job uses it to upsert section-C scores with the `trainee_writer` role |
 
 Variables (optional; the defaults are shown):
 
@@ -131,7 +131,7 @@ The API log shows `llm call purpose=... Ns` for each model call, and `agent ...`
 
 ## Known gaps
 - Real login (Zitadel) and the common UI are not built.
-- Pod D sync runs only when `PODC_ENV=prod` and dev auth is disabled. Production must not be used until Zitadel maps the verified identity to the existing Pod D `trainees.trainee_id` in the session owner reference; never use an untrusted UI-supplied ID.
+- Pod D sync runs whenever `TRAINEE_DB_URL` is configured, including dev-auth runs. The dev login's entered ID is not verified; the shared Pod D table will be updated for that exact ID. Use only with the intended test data until Zitadel provides a trusted ID.
 - Key Vault mode failed its first run inside the container (`vault login failed (ConnectError)`: the vault client did not trust the proxy-re-signed Azure login). The image now sets `SSL_CERT_FILE` to the system bundle, and the error now says why. The "Model key check" step on the next deploy is the test that it works.
 - The server's root disk (where Docker keeps images, build cache and the volume) was 75% full with about 8 GB free. The workflow removes only our own old tags; build cache is shared with the other pods and is not pruned. Tell the architect.
 - Shell settings on the shared `localadmin` account export `SSL_CERT_FILE` and `REQUESTS_CA_BUNDLE` for login shells. Run test commands with `env -u SSL_CERT_FILE -u REQUESTS_CA_BUNDLE`. The runner service does not read them.

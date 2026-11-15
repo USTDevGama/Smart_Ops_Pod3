@@ -79,6 +79,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -122,6 +130,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -175,6 +191,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         content:
           application/json:
@@ -236,6 +260,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -288,6 +320,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -347,6 +387,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -383,6 +431,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -433,6 +489,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -477,6 +541,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -543,6 +615,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -589,6 +669,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -631,6 +719,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '204':
           description: Successful Response
@@ -664,6 +760,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -722,6 +826,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -768,6 +880,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -810,6 +930,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '204':
           description: Successful Response
@@ -844,6 +972,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -884,9 +1020,9 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
-          description: admins only
+          description: admins may search by trainee name or ID
           title: Trainee Ref
-        description: admins only
+        description: admins may search by trainee name or ID
       - name: limit
         in: query
         required: false
@@ -920,6 +1056,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -966,6 +1110,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1023,6 +1175,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       requestBody:
         required: true
         content:
@@ -1072,6 +1232,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1119,6 +1287,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1165,6 +1341,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '202':
           description: Successful Response
@@ -1219,6 +1403,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1254,6 +1446,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1296,6 +1496,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1331,6 +1539,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Dev-Role
+      - name: x-dev-trainee-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Dev-Trainee-Id
       responses:
         '200':
           description: Successful Response
@@ -1618,6 +1834,11 @@ components:
         owner_ref:
           type: string
           title: Owner Ref
+        trainee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trainee Id
         content:
           anyOf:
           - additionalProperties: true
@@ -1660,6 +1881,11 @@ components:
         owner_ref:
           type: string
           title: Owner Ref
+        trainee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trainee Id
       type: object
       required:
       - id
@@ -1788,6 +2014,11 @@ components:
         trainee_ref:
           type: string
           title: Trainee Ref
+        trainee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trainee Id
         profile_id:
           anyOf:
           - type: string
@@ -1857,6 +2088,11 @@ components:
         trainee_ref:
           type: string
           title: Trainee Ref
+        trainee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trainee Id
         profile_id:
           anyOf:
           - type: string

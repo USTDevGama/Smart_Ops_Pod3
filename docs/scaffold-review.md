@@ -365,7 +365,7 @@ This session made 4 calls: 1 opening, 2 turns, 1 score.
 | `created_at` | timestamp | when | `09:41` | `10:12` |
 
 ### 4.13 Pod D score handoff
-The outgoing result (`RoleplayResult`) is built from the validated assessment and authenticated trainee id. It is upserted into Pod D's `trainee_profiles.trainee_scores` only in production when dev auth is disabled. `samples/results/vendor_delay_result.json` shows the payload before persistence: `trainee_id` plus integer `C_scores` for G06, G08 and G10. Scores map deterministically from criterion points, round half up, and clamp to the live database's 1-5 constraint.
+The outgoing result (`RoleplayResult`) is built from the validated assessment and the session's trainee ID. It is upserted into Pod D's `trainee_profiles.trainee_scores` whenever `TRAINEE_DB_URL` is configured, including dev-auth runs. Dev IDs are not verified; sync writes to the entered ID. `samples/results/vendor_delay_result.json` shows the payload before persistence: `trainee_id` plus integer `C_scores` for G06, G08 and G10. Scores map deterministically from criterion points, round half up, and clamp to the live database's 1-5 constraint.
 
 ### 4.14 Why we keep these in the database, who uses them, and the intuition
 

@@ -35,6 +35,8 @@ def test_upload_saves_the_file_and_queues_the_job(api):
     assert response.status_code == 202
     body = response.json()
     assert body["status"] == "queued"
+    assert body["owner_ref"] == "anna"
+    assert body["trainee_id"] == "T-1001"
     assert api.queued == [UUID(body["id"])]
     assert api.store.read(_row(api, body["id"]).blob_uri) == TXT
 
