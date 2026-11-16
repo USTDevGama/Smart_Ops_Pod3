@@ -10,7 +10,6 @@ storage/
 *.db
 .idea/
 .vscode/
-Smart_Ops/
 
 # The corporate root certificate is copied here by the deploy workflow before the image build.
 ca/*
