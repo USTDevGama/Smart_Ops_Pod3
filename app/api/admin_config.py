@@ -116,7 +116,7 @@ def _commit(db: Session) -> None:
         raise HTTPException(status.HTTP_409_CONFLICT, "someone saved at the same time") from None
 
 
-@router.get("/admin/config/{kind}", response_model=list[KeyOut])
+@router.get("/admin/confi/{kind}", response_model=list[KeyOut])
 def list_keys(
     kind: ConfigKind, _: CurrentUser = Depends(admin_only), db: Session = Depends(get_db)
 ):
